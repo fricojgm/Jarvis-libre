@@ -1,0 +1,7 @@
+{
+  "identidad": "",
+  "portafolio": [],
+  "proyectos": [],
+  "configuracion": {},
+  "aprendizajes": []
+}

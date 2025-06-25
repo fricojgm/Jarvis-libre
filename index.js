@@ -1,53 +1,90 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
+const fs = require('fs');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
 
-// Memoria inicial (se ampliará a permanente)
+app.use(express.json());
+
+// Memoria inicial
 let memoria = {
-  portafolio: [],
-  aprendizajes: [],
+    portafolio: [],
+    aprendizajes: [],
 };
+
+// Cargar memoria desde archivo sin romper la estructura
+try {
+    const data = fs.readFileSync('memoria.json', 'utf8');
+    const cargada = JSON.parse(data);
+
+    memoria.portafolio = cargada.portafolio || [];
+    memoria.aprendizajes = cargada.aprendizajes || [];
+
+    console.log('✅ Memoria cargada con éxito:', memoria);
+} catch (err) {
+    console.log('⚠️ No se pudo cargar memoria, iniciando vacía.');
+}
+// Guardar memoria en archivo
+function guardarMemoria() {
+    fs.writeFileSync('memoria.json', JSON.stringify(memoria, null, 2));
+}
+
+// Agregar un aprendizaje a la memoria
+function agregarAprendizaje(texto) {
+    memoria.aprendizajes.push({ fecha: new Date(), contenido: texto });
+    guardarMemoria();
+}
+
+// Endpoint para configurar identidad y proyectos
+app.post('/configurar', (req, res) => {
+    const { identidad, proyectos } = req.body;
+
+    memoria.portafolio.push(proyectos);
+    memoria.aprendizajes.push({ fecha: new Date(), tipo: 'configuracion', contenido: identidad });
+
+    guardarMemoria();
+    res.json({ status: 'Configuración recibida', memoria });
+});
+
 
 // Endpoint de prueba
 app.get('/', (req, res) => {
-  res.send('Jarvis-Libre operativo');
+    res.send('✅ Jarvis-Libre operativo');
 });
 
 // Endpoint de status
 app.get('/status', (req, res) => {
-  res.json({ status: 'Activo', memoria });
+    res.json({ status: 'Activo', memoria });
 });
 
-// Endpoint para consultar acciones en Polygon
-app.get('/acciones/:ticker', async (req, res) => {
-  const { ticker } = req.params;
-  try {
-    const response = await axios.get(`https://api.polygon.io/v2/aggs/ticker/${ticker}/prev?adjusted=true&apiKey=${POLYGON_API_KEY}`);
-    res.json(response.data);
-  } catch (error) {
-    res.status(500).json({ error: 'Error consultando Polygon', detalle: error.message });
-  }
+// Endpoint para recibir identidad o configuraciones
+app.post('/configurar', (req, res) => {
+    const datos = req.body;
+    memoria.push({ fecha: new Date(), tipo: 'configuracion', contenido: datos });
+    guardarMemoria();
+    res.json({ status: 'Configuración recibida', memoria });
 });
 
-// Endpoint para entrenamiento
-app.use(express.json());
-app.post('/entrenamiento', (req, res) => {
-  const { tipo, contenido } = req.body;
-  if (tipo === 'portafolio') {
-    memoria.portafolio = contenido;
-    return res.json({ mensaje: 'Portafolio actualizado', memoria });
-  }
-  if (tipo === 'aprendizaje') {
-    memoria.aprendizajes.push(contenido);
-    return res.json({ mensaje: 'Aprendizaje almacenado', memoria });
-  }
-  res.status(400).json({ error: 'Tipo de entrenamiento no reconocido' });
+
+// Endpoint para entrenar (guardar configuraciones y aprendizajes)
+app.post('/entrenar', (req, res) => {
+    const { tipo, contenido } = req.body;
+
+    if (tipo === 'portafolio') {
+        memoria.portafolio.push(contenido);
+    } else if (tipo === 'aprendizaje') {
+        memoria.aprendizajes.push({ fecha: new Date(), contenido });
+    } else {
+        return res.status(400).json({ error: 'Tipo no reconocido' });
+    }
+
+    guardarMemoria();
+    res.json({ status: '✅ Aprendido', memoria });
 });
 
-// Servidor activo
 app.listen(PORT, () => {
-  console.log(`Jarvis-Libre activo en puerto ${PORT}`);
+    console.log(`✅ Jarvis-Libre escuchando en puerto ${PORT}`);
 });
