@@ -6,6 +6,7 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
+console.log('⚡ Clave Polygon cargada:', POLYGON_API_KEY);
 
 app.use(express.json());
 
