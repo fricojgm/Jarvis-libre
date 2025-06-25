@@ -68,6 +68,58 @@ app.post('/configurar', (req, res) => {
     res.json({ status: 'Configuración recibida', memoria });
 });
 
+// Consultar último precio de un activo
+app.get('/polygon/price', async (req, res) => {
+    try {
+        const symbol = req.query.symbol || 'AAPL';
+        const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
+        const response = await axios.get(url);
+        res.json({ status: '✅ Último precio', data: response.data });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener precio' });
+    }
+});
+
+// Consultar resumen del día anterior (OHLC, volumen, etc.)
+app.get('/polygon/summary', async (req, res) => {
+    try {
+        const symbol = req.query.symbol || 'AAPL';
+        const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${POLYGON_API_KEY}`;
+        const response = await axios.get(url);
+        res.json({ status: '✅ Resumen diario', data: response.data });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener resumen' });
+    }
+});
+
+// Consultar libro de órdenes (Level 2 Market Data)
+app.get('/polygon/book', async (req, res) => {
+    try {
+        const symbol = req.query.symbol || 'AAPL';
+        const url = `https://api.polygon.io/v3/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`;
+        const response = await axios.get(url);
+        res.json({ status: '✅ Snapshot Market Data', data: response.data });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener snapshot' });
+    }
+});
+
+// Consultar cotizaciones en tiempo real
+app.get('/polygon/quote', async (req, res) => {
+    try {
+        const symbol = req.query.symbol || 'AAPL';
+        const url = `https://api.polygon.io/v3/quotes/${symbol}?apiKey=${POLYGON_API_KEY}`;
+        const response = await axios.get(url);
+        res.json({ status: '✅ Cotización actual', data: response.data });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener cotización' });
+    }
+});
+
 
 // Endpoint para entrenar (guardar configuraciones y aprendizajes)
 app.post('/entrenar', (req, res) => {
