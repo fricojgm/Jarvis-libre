@@ -1,24 +1,58 @@
-require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const app = express();
-app.use(express.json());
+const bodyParser = require('body-parser');
+require('dotenv').config();
 
+const app = express();
 const PORT = process.env.PORT || 3000;
+
 const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
 
-app.get('/consultar', async (req, res) => {
-    const simbolo = req.query.simbolo || 'AAPL';
+app.use(bodyParser.json());
+
+let memoria = {
+    portafolio: [],
+    aprendizajes: []
+};
+
+// Cargar memoria si existe (versión simple)
+try {
+    memoria = require('./memoria.json');
+    console.log('✅ Memoria cargada con éxito:', memoria);
+} catch (error) {
+    console.log('⚠️ No se pudo cargar memoria, iniciando vacía.');
+}
+
+// Ruta GET para probar desde navegador
+app.get('/consultar/:symbol', async (req, res) => {
+    const symbol = req.params.symbol;
+    const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
+
     try {
-        const url = `https://api.polygon.io/v2/aggs/ticker/${simbolo}/prev?adjusted=true&apiKey=${POLYGON_API_KEY}`;
-        const response = await axios.get(url);
-        res.json(response.data);
+        const respuesta = await axios.get(url);
+        res.json(respuesta.data);
     } catch (error) {
-        console.error(error);
-        res.status(500).send('Error al consultar Polygon');
+        console.error('Error consultando precio:', error.response ? error.response.data : error.message);
+        res.status(500).json({ error: 'Error consultando precio' });
     }
 });
 
+// Ruta POST para integraciones automáticas
+app.post('/consultar/:symbol', async (req, res) => {
+    const symbol = req.params.symbol;
+    const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
+
+    try {
+        const respuesta = await axios.get(url);
+        res.json(respuesta.data);
+    } catch (error) {
+        console.error('Error consultando precio:', error.response ? error.response.data : error.message);
+        res.status(500).json({ error: 'Error consultando precio' });
+    }
+});
+
+// Iniciar servidor
 app.listen(PORT, () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
+    console.log(`✅ Jarvis-Libre escuchando en puerto ${PORT}`);
+    console.log(`🔑 Clave Polygon: ${POLYGON_API_KEY}`);
 });
