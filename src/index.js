@@ -4,8 +4,7 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
-const TELEGRAM_BOT_TOKEN = '7868141860:AAGUmHQdNPM32t-70zU0uH78KXH6ajpg_7Y
-';
+const TELEGRAM_BOT_TOKEN = '7868141860:AAGUmHQdNPM32t-70zU0uH78KXH6ajpg_7Y';
 
 const portafolio = ["AVGO", "SCHD", "VITA", "XLE", "GLD", "IWM", "AAPL", "MSFT"];
 const historialReportes = [];
