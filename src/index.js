@@ -4,21 +4,11 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
-const TELEGRAM_BOT_TOKEN = '7868141860:AAGUmHQdNPM32t-70zU0uH78KXH6ajpg_7Y';
-const CHAT_ID = '1418346985';
 
 const portafolio = ["AVGO", "SCHD", "VITA", "XLE", "GLD", "IWM", "AAPL", "MSFT"];
 const historialReportes = [];
 
-// Telegram
-function enviarReporteTelegram(symbol, mensaje) {
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    axios.post(url, { chat_id: CHAT_ID, text: mensaje })
-        .then(() => console.log(`✅ Reporte enviado para ${symbol}`))
-        .catch(err => console.error(err.message));
-}
-
-// Cálculos
+// Cálculos técnicos
 function calcularRSI(precios) {
     let ganancias = 0, perdidas = 0;
     for (let i = 1; i <= 14; i++) {
@@ -47,63 +37,57 @@ function detectarPatronVelas(candles) {
     return "Sin patrón";
 }
 
-// Análisis técnico
-async function analizarActivo(symbol) {
-    try {
-        const res = await axios.get(`https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/2024-01-01/2025-12-31?adjusted=true&sort=desc&limit=50&apiKey=${POLYGON_API_KEY}`);
-        if (res.data && res.data.results) {
-            const precios = res.data.results.map(c => c.c).reverse();
-            const velas = res.data.results.slice(-2).map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c }));
-            const volumen = res.data.results[0]?.v || 'N/A';
-            const maximo = res.data.results[0]?.h || 'N/A';
-            const minimo = res.data.results[0]?.l || 'N/A';
+// Endpoint principal para reporte completo
+app.get('/reporte-mercado', async (req, res) => {
+    const resumen = {};
 
+    for (const symbol of portafolio) {
+        try {
+            const resPrecio = await axios.get(`https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/2024-01-01/2025-12-31?adjusted=true&sort=desc&limit=50&apiKey=${POLYGON_API_KEY}`);
+            const datos = resPrecio.data.results;
+            const precios = datos.map(c => c.c).reverse();
+            const velas = datos.slice(-2).map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c }));
+            const volumen = datos[0]?.v || 'N/A';
+            const maximo = datos[0]?.h || 'N/A';
+            const minimo = datos[0]?.l || 'N/A';
+
+            let rsi = "N/A", macd = "N/A", patron = "N/A";
             if (precios.length >= 26) {
-                const rsi = calcularRSI(precios);
-                const macd = calcularMACD(precios);
-                const patron = detectarPatronVelas(velas);
-                const precioActual = precios.at(-1);
-                const hora = new Date().toLocaleTimeString();
-
-                const mensaje = `📊 Análisis ${symbol}
-• Precio: $${precioActual}
-• RSI: ${rsi}
-• MACD: ${macd}
-• Velas: ${patron}
-• Volumen: ${volumen}
-• Máximo: $${maximo}
-• Mínimo: $${minimo}
-• Hora: ${hora}`;
-
-                historialReportes.push({ symbol, precioActual, rsi, macd, patron, volumen, maximo, minimo, timestamp: hora });
-                enviarReporteTelegram(symbol, mensaje);
+                rsi = calcularRSI(precios);
+                macd = calcularMACD(precios);
+                patron = detectarPatronVelas(velas);
             }
+
+            const resFundamental = await axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
+            const datosFund = resFundamental.data.results;
+            const marketCap = datosFund.market_cap || 'N/A';
+            const peRatio = datosFund.pe_ratio || 'N/A';
+            const eps = datosFund.eps || 'N/A';
+
+            resumen[symbol] = {
+                precioActual: precios.at(-1),
+                rsi, macd, patron, volumen, maximo, minimo,
+                fundamental: { marketCap, peRatio, eps }
+            };
+
+        } catch (err) {
+            console.error(`Error procesando ${symbol}: ${err.message}`);
+            resumen[symbol] = { error: "Datos no disponibles" };
         }
-    } catch (err) { console.error(`⚠️ Error ${symbol}: ${err.message}`); }
-}
-
-// Monitoreo con horario de mercado
-async function monitorear() {
-    const horaActual = new Date();
-    const horaDecimal = horaActual.getHours() + (horaActual.getMinutes() / 60);
-
-    if (horaDecimal >= 9.5 && horaDecimal <= 17) {
-        console.log(`📡 Análisis Técnico ${horaActual.toLocaleTimeString()}`);
-        for (const symbol of portafolio) await analizarActivo(symbol);
-    } else {
-        console.log(`⏸️ Fuera de horario bursátil, no se ejecuta análisis`);
     }
-}
 
-// Endpoints
-app.get('/', (req, res) => res.send('Jarvis-Libre con reporte completo por Telegram listo'));
-app.get('/reporte', (req, res) => res.json(historialReportes));
+    res.json(resumen);
+});
+
+// Endpoint simple de prueba
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo con reporte técnico + fundamental'));
 
 app.listen(PORT, () => {
     console.log(`🚀 Servidor operativo en puerto ${PORT}`);
-    monitorear();
-    setInterval(monitorear, 60000);
 });
+
+
+
 
 
 
