@@ -5,7 +5,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 🔑 Reemplaza esto por tu API Key real de Polygon
-const POLYGON_API_KEY = '8afDJ382kd83klFja8sd832';
+const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 app.get('/', (req, res) => {
   res.send('Jarvis-Libre está operativo');
