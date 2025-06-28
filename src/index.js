@@ -5,8 +5,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
-const portafolio = ["AVGO", "SCHD", "VITA", "XLE", "GLD", "IWM", "AAPL", "MSFT"];
-
 // Cálculos técnicos
 function calcularRSI(precios) {
     let ganancias = 0, perdidas = 0;
@@ -42,15 +40,20 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const timeframe = req.query.timeframe || 'day';
     const cantidad = req.query.cantidad || 50;
 
-    const timeframesValidos = ['minute', 'hour', 'day', 'week', 'month', 'year'];
+    const timeframesValidos = ['minute', 'hour', 'day', 'week', 'month', 'year', 'anual'];
     if (!timeframesValidos.includes(timeframe)) {
-        return res.status(400).json({ error: "Timeframe inválido. Usa: minute, hour, day, week, month, year." });
+        return res.status(400).json({ error: "Timeframe inválido. Usa: minute, hour, day, week, month, year, anual." });
     }
 
     try {
         const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2024-01-01/2025-12-31?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
         const resPrecio = await axios.get(url);
         const datos = resPrecio.data.results;
+        
+        if (!datos || datos.length === 0) {
+            return res.status(404).json({ error: "Sin datos disponibles en ese timeframe para este activo." });
+        }
+
         const precios = datos.map(c => c.c).reverse();
         const velas = datos.slice(-2).map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c }));
         const volumen = datos[0]?.v || 'N/A';
@@ -84,9 +87,9 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-// Endpoint simple de prueba
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental y timeframes flexibles'));
+// Endpoint de prueba
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental y timeframes flexibles incluyendo anual.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor operativo en puerto ${PORT} con soporte de timeframes y anual habilitado`);
+    console.log(`🚀 Servidor operativo en puerto ${PORT} con timeframes flexibles y anual incluido.`);
 });
