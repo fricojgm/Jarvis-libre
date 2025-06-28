@@ -40,9 +40,9 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const timeframe = req.query.timeframe || 'day';
     const cantidad = req.query.cantidad || 50;
 
-    const timeframesValidos = ['minute', 'hour', 'day', 'week', 'month', 'year', 'anual'];
+    const timeframesValidos = ['minute', '5min', '15min', '30min', 'hour', '4h', 'day', 'week', 'month', 'year', 'anual'];
     if (!timeframesValidos.includes(timeframe)) {
-        return res.status(400).json({ error: "Timeframe inválido. Usa: minute, hour, day, week, month, year, anual." });
+        return res.status(400).json({ error: "Timeframe inválido. Usa: minute, 5min, 15min, 30min, hour, 4h, day, week, month, year, anual." });
     }
 
     try {
@@ -88,8 +88,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 });
 
 // Endpoint de prueba
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental y timeframes flexibles incluyendo anual.'));
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental y timeframes avanzados habilitados.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor operativo en puerto ${PORT} con timeframes flexibles y anual incluido.`);
+    console.log(`🚀 Servidor operativo en puerto ${PORT} con soporte de timeframes profesionales.`);
 });
