@@ -23,18 +23,18 @@ function calcularMACD(precios) {
     return (ema12 - ema26).toFixed(2);
 }
 
-function detectarPatronVelas(candles) {
-    if (candles.length < 2) return "Insuficiente data";
-    const u = candles[candles.length - 1], p = candles[candles.length - 2];
-    const c = Math.abs(u.c - u.o), r = u.h - u.l;
-    if (c < (r * 0.3) && (u.h - u.c) < (r * 0.1)) return "Martillo";
-    if (c < (r * 0.05)) return "Doji";
-    if (p.c < p.o && u.c > u.o && u.c > p.o && u.o < p.c) return "Envolvente Alcista";
-    if (p.c > p.o && u.c < u.o && u.o > p.c && u.c < p.o) return "Envolvente Bajista";
+function detectarPatronVelas(ohlc) {
+    if (ohlc.length < 2) return "Insuficiente data";
+    const u = ohlc[ohlc.length - 1], p = ohlc[ohlc.length - 2];
+    const cuerpo = Math.abs(u.close - u.open), rango = u.high - u.low;
+    if (cuerpo < (rango * 0.3) && (u.high - u.close) < (rango * 0.1)) return "Martillo";
+    if (cuerpo < (rango * 0.05)) return "Doji";
+    if (p.close < p.open && u.close > u.open && u.close > p.open && u.open < p.close) return "Envolvente Alcista";
+    if (p.close > p.open && u.close < u.open && u.open > p.close && u.close < p.open) return "Envolvente Bajista";
     return "Sin patrón";
 }
 
-// Endpoint flexible con timeframe y cantidad
+// Endpoint flexible con OHLC completo
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
@@ -49,13 +49,19 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2024-01-01/2025-12-31?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
         const resPrecio = await axios.get(url);
         const datos = resPrecio.data.results;
-        
+
         if (!datos || datos.length === 0) {
             return res.status(404).json({ error: "Sin datos disponibles en ese timeframe para este activo." });
         }
 
         const precios = datos.map(c => c.c).reverse();
-        const velas = datos.slice(-2).map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c }));
+        const ohlc = datos.slice(-2).map(c => ({
+            open: c.o,
+            high: c.h,
+            low: c.l,
+            close: c.c
+        }));
+
         const volumen = datos[0]?.v || 'N/A';
         const maximo = datos[0]?.h || 'N/A';
         const minimo = datos[0]?.l || 'N/A';
@@ -64,7 +70,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         if (precios.length >= 26) {
             rsi = calcularRSI(precios);
             macd = calcularMACD(precios);
-            patron = detectarPatronVelas(velas);
+            patron = detectarPatronVelas(ohlc);
         }
 
         const resFundamental = await axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
@@ -78,6 +84,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
             timeframe,
             precioActual: precios.at(-1),
             rsi, macd, patron, volumen, maximo, minimo,
+            ohlcCompleto: ohlc.reverse(),
             fundamental: { marketCap, peRatio, eps }
         });
 
@@ -87,9 +94,9 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-// Endpoint de prueba
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental y timeframes avanzados habilitados.'));
+// Endpoint simple
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental, OHLC completo y timeframes flexibles.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor operativo en puerto ${PORT} con soporte de timeframes profesionales.`);
+    console.log(`🚀 Servidor operativo en puerto ${PORT} con OHLC profesional y timeframes avanzados.`);
 });
