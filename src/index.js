@@ -26,11 +26,11 @@ function calcularMACD(precios) {
 function detectarPatronVelas(ohlc) {
     if (ohlc.length < 2) return "Insuficiente data";
     const u = ohlc[ohlc.length - 1], p = ohlc[ohlc.length - 2];
-    const cuerpo = Math.abs(u.cierre - u.apertura), rango = u.maximo - u.minimo;
-    if (cuerpo < (rango * 0.3) && (u.maximo - u.cierre) < (rango * 0.1)) return "Martillo";
+    const cuerpo = Math.abs(u.close - u.open), rango = u.high - u.low;
+    if (cuerpo < (rango * 0.3) && (u.high - u.close) < (rango * 0.1)) return "Martillo";
     if (cuerpo < (rango * 0.05)) return "Doji";
-    if (p.cierre < p.apertura && u.cierre > u.apertura && u.cierre > p.apertura && u.apertura < p.cierre) return "Envolvente Alcista";
-    if (p.cierre > p.apertura && u.cierre < u.apertura && u.apertura > p.cierre && u.cierre < p.apertura) return "Envolvente Bajista";
+    if (p.close < p.open && u.close > u.open && u.close > p.open && u.open < p.close) return "Envolvente Alcista";
+    if (p.close > p.open && u.close < u.open && u.open > p.close && u.close < p.open) return "Envolvente Bajista";
     return "Sin patrón";
 }
 
@@ -55,20 +55,21 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         }
 
         const precios = datos.map(c => c.c).reverse();
+        
         const ohlc = datos.slice(-2).map(c => ({
             fecha: new Date(c.t).toISOString().split('T')[0],
-            apertura: c.o,
-            maximo: c.h,
-            minimo: c.l,
-            cierre: c.c
+            open: c.o,
+            high: c.h,
+            low: c.l,
+            close: c.c
         }));
 
         const ohlcCompleto = datos.map(c => ({
             fecha: new Date(c.t).toISOString().split('T')[0],
-            apertura: c.o,
-            maximo: c.h,
-            minimo: c.l,
-            cierre: c.c
+            open: c.o,
+            high: c.h,
+            low: c.l,
+            close: c.c
         })).reverse();
 
         const volumen = datos[0]?.v || 'N/A';
@@ -104,7 +105,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 });
 
 // Endpoint simple
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental, OHLC completo y timeframes avanzados.'));
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental, OHLC completo (con fecha) y timeframes avanzados.'));
 
 app.listen(PORT, () => {
     console.log(`🚀 Servidor operativo en puerto ${PORT} con OHLC profesional y timeframes avanzados.`);
