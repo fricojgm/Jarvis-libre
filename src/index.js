@@ -5,7 +5,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
-// Cálculos técnicos
 function calcularRSI(precios) {
     let ganancias = 0, perdidas = 0;
     for (let i = 1; i <= 14; i++) {
@@ -34,11 +33,10 @@ function detectarPatronVelas(ohlc) {
     return "Sin patrón";
 }
 
-// Endpoint flexible con OHLC completo
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
-    const cantidad = req.query.cantidad || 50;
+    const cantidad = parseInt(req.query.cantidad) || 50;
 
     const timeframesValidos = ['minute', '5min', '15min', '30min', 'hour', '4h', 'day', 'week', 'month', 'year', 'anual'];
     if (!timeframesValidos.includes(timeframe)) {
@@ -55,14 +53,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         }
 
         const precios = datos.map(c => c.c).reverse();
-        
-        const ohlc = datos.slice(-2).map(c => ({
-            fecha: new Date(c.t).toISOString().split('T')[0],
-            apertura: c.o,
-            maximo: c.h,
-            minimo: c.l,
-            cierre: c.c
-        }));
 
         const ohlcCompleto = datos.map(c => ({
             fecha: new Date(c.t).toISOString().split('T')[0],
@@ -71,6 +61,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
             minimo: c.l,
             cierre: c.c
         })).reverse();
+
+        const ohlc = ohlcCompleto.slice(-2);
 
         const volumen = datos[0]?.v || 'N/A';
         const maximo = datos[0]?.h || 'N/A';
@@ -93,6 +85,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
             symbol,
             timeframe,
             precioActual: precios.at(-1),
+            historico: precios.slice(-cantidad),
             rsi, macd, patron, volumen, maximo, minimo,
             ohlcCompleto,
             fundamental: { marketCap, peRatio, eps }
@@ -104,7 +97,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-// Endpoint simple
 app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental, OHLC completo y timeframes avanzados.'));
 
 app.listen(PORT, () => {
