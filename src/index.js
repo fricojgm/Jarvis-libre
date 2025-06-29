@@ -36,7 +36,7 @@ function detectarPatronVelas(ohlc) {
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
-    const cantidad = parseInt(req.query.cantidad) || 50;
+    const cantidad = parseInt(req.query.cantidad) || 100;
 
     const timeframesValidos = ['minute', '5min', '15min', '30min', 'hour', '4h', 'day', 'week', 'month', 'year', 'anual'];
     if (!timeframesValidos.includes(timeframe)) {
@@ -97,8 +97,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo con técnico, fundamental, OHLC completo y timeframes avanzados.'));
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo optimizado con técnico, fundamental, OHLC completo y timeframes avanzados.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor operativo en puerto ${PORT} con OHLC profesional y timeframes avanzados.`);
+    console.log(`🚀 Servidor operativo en puerto ${PORT} listo para multi-timeframe y análisis profesional.`);
 });
