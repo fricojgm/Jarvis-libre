@@ -36,7 +36,7 @@ function detectarPatronVelas(ohlc) {
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
-    const cantidad = parseInt(req.query.cantidad) || 100;
+    const cantidad = parseInt(req.query.cantidad) || 300; // Aquí subimos el default a 300 velas
 
     const timeframesValidos = ['minute', '5min', '15min', '30min', 'hour', '4h', 'day', 'week', 'month', 'year', 'anual'];
     if (!timeframesValidos.includes(timeframe)) {
