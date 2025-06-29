@@ -36,14 +36,13 @@ function detectarPatronVelas(ohlc) {
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
-    const cantidad = parseInt(req.query.cantidad) || 300;
+    const cantidad = parseInt(req.query.cantidad) || 5000; // Máximo de velas posibles
 
     const timeframesValidos = ['minute', '5min', '15min', '30min', 'hour', '4h', 'day', 'week', 'month', 'year', 'anual'];
     if (!timeframesValidos.includes(timeframe)) {
         return res.status(400).json({ error: "Timeframe inválido. Usa: minute, 5min, 15min, 30min, hour, 4h, day, week, month, year, anual." });
     }
 
-    // Ajuste: Pedimos datos desde el 2010 para garantizar histórico completo
     const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/2025-12-31?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
 
     try {
@@ -69,15 +68,9 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         const minimo = datos[0]?.l || 'N/A';
 
         let rsi = "N/A", macd = "N/A", patron = "N/A";
-        if (precios.length >= 14) {
-            rsi = calcularRSI(precios);
-        }
-        if (precios.length >= 26) {
-            macd = calcularMACD(precios);
-        }
-        if (ohlcCompleto.length >= 2) {
-            patron = detectarPatronVelas(ohlc);
-        }
+        if (precios.length >= 14) rsi = calcularRSI(precios);
+        if (precios.length >= 26) macd = calcularMACD(precios);
+        if (ohlc.length >= 2) patron = detectarPatronVelas(ohlc);
 
         const resFundamental = await axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
         const datosFund = resFundamental.data.results;
@@ -101,7 +94,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo con 15 años de datos, técnico y fundamental completo.'));
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo con histórico extendido (15 años), velas reales y análisis completo.'));
 
 app.listen(PORT, () => {
     console.log(`🚀 Servidor operativo en puerto ${PORT} listo con histórico extendido y multi-timeframe.`);
