@@ -43,14 +43,10 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         return res.status(400).json({ error: "Timeframe inválido. Usa: minute, 5min, 15min, 30min, hour, 4h, day, week, month, year, anual." });
     }
 
-    // Rango de fechas flexible
-    let fechaInicio = '2024-01-01';
-    if (['month', 'year', 'anual'].includes(timeframe)) {
-        fechaInicio = '2000-01-01';  // Pide data de los últimos 25 años
-    }
+    // Ajuste: Pedimos datos desde el 2010 para garantizar histórico completo
+    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/2025-12-31?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
 
     try {
-        const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/${fechaInicio}/2025-12-31?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
         const resPrecio = await axios.get(url);
         const datos = resPrecio.data.results;
 
@@ -59,7 +55,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         }
 
         const precios = datos.map(c => c.c).reverse();
-
         const ohlcCompleto = datos.map(c => ({
             fecha: new Date(c.t).toISOString().split('T')[0],
             apertura: c.o,
@@ -69,15 +64,18 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         })).reverse();
 
         const ohlc = ohlcCompleto.slice(-2);
-
         const volumen = datos[0]?.v || 'N/A';
         const maximo = datos[0]?.h || 'N/A';
         const minimo = datos[0]?.l || 'N/A';
 
         let rsi = "N/A", macd = "N/A", patron = "N/A";
-        if (precios.length >= 26) {
+        if (precios.length >= 14) {
             rsi = calcularRSI(precios);
+        }
+        if (precios.length >= 26) {
             macd = calcularMACD(precios);
+        }
+        if (ohlcCompleto.length >= 2) {
             patron = detectarPatronVelas(ohlc);
         }
 
@@ -103,8 +101,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo optimizado con técnico, fundamental, OHLC completo y timeframes avanzados.'));
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo con 15 años de datos, técnico y fundamental completo.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor operativo en puerto ${PORT} listo para multi-timeframe y análisis profesional.`);
+    console.log(`🚀 Servidor operativo en puerto ${PORT} listo con histórico extendido y multi-timeframe.`);
 });
