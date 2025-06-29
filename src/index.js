@@ -36,15 +36,21 @@ function detectarPatronVelas(ohlc) {
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
-    const cantidad = parseInt(req.query.cantidad) || 300; // Aquí subimos el default a 300 velas
+    const cantidad = parseInt(req.query.cantidad) || 300;
 
     const timeframesValidos = ['minute', '5min', '15min', '30min', 'hour', '4h', 'day', 'week', 'month', 'year', 'anual'];
     if (!timeframesValidos.includes(timeframe)) {
         return res.status(400).json({ error: "Timeframe inválido. Usa: minute, 5min, 15min, 30min, hour, 4h, day, week, month, year, anual." });
     }
 
+    // Rango de fechas flexible
+    let fechaInicio = '2024-01-01';
+    if (['month', 'year', 'anual'].includes(timeframe)) {
+        fechaInicio = '2000-01-01';  // Pide data de los últimos 25 años
+    }
+
     try {
-        const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2024-01-01/2025-12-31?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
+        const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/${fechaInicio}/2025-12-31?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
         const resPrecio = await axios.get(url);
         const datos = resPrecio.data.results;
 
