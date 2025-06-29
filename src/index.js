@@ -36,14 +36,15 @@ function detectarPatronVelas(ohlc) {
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
-    const cantidad = parseInt(req.query.cantidad) || 5000; // Máximo de velas posibles
+    const cantidad = parseInt(req.query.cantidad) || 5000; 
 
     const timeframesValidos = ['minute', '5min', '15min', '30min', 'hour', '4h', 'day', 'week', 'month', 'year', 'anual'];
     if (!timeframesValidos.includes(timeframe)) {
         return res.status(400).json({ error: "Timeframe inválido. Usa: minute, 5min, 15min, 30min, hour, 4h, day, week, month, year, anual." });
     }
 
-    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/2025-12-31?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
+    const hoy = new Date().toISOString().split('T')[0]; // Fecha actual dinámica
+    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
 
     try {
         const resPrecio = await axios.get(url);
@@ -94,8 +95,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo con histórico extendido (15 años), velas reales y análisis completo.'));
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo con histórico extendido (15 años), velas reales, MACD y fecha dinámica.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor operativo en puerto ${PORT} listo con histórico extendido y multi-timeframe.`);
+    console.log(`🚀 Servidor operativo en puerto ${PORT} listo con datos extendidos y ajustes dinámicos.`);
 });
