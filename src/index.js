@@ -37,20 +37,14 @@ function esVelaAbierta(vela, timeframe) {
     const hoy = new Date();
     const fechaVela = new Date(vela.fecha);
 
-    if (timeframe === 'day') {
-        return fechaVela.toDateString() === hoy.toDateString();
-    }
+    if (timeframe === 'day') return fechaVela.toDateString() === hoy.toDateString();
     if (timeframe === 'week') {
         const semanaActual = getWeekNumber(hoy);
         const semanaVela = getWeekNumber(fechaVela);
         return semanaActual === semanaVela && hoy.getFullYear() === fechaVela.getFullYear();
     }
-    if (timeframe === 'month') {
-        return hoy.getFullYear() === fechaVela.getFullYear() && hoy.getMonth() === fechaVela.getMonth();
-    }
-    if (timeframe === 'year' || timeframe === 'anual') {
-        return hoy.getFullYear() === fechaVela.getFullYear();
-    }
+    if (timeframe === 'month') return hoy.getFullYear() === fechaVela.getFullYear() && hoy.getMonth() === fechaVela.getMonth();
+    if (timeframe === 'year' || timeframe === 'anual') return hoy.getFullYear() === fechaVela.getFullYear();
     return false;
 }
 
@@ -107,12 +101,11 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         if (precios.length >= 26) {
             macd = calcularMACD(precios);
         } else if (precios.length < 26 && timeframe !== 'minute') {
-            // Intentamos retroceder dinámicamente
             const fechaInicioExtra = new Date();
-            fechaInicioExtra.setMonth(fechaInicioExtra.getMonth() - (30 + 12)); // Retrocede 42 meses adicionales
+            fechaInicioExtra.setMonth(fechaInicioExtra.getMonth() - 42);
             const inicioExtra = fechaInicioExtra.toISOString().split('T')[0];
-
             const urlExtra = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/${inicioExtra}/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
+
             const extraData = await axios.get(urlExtra);
             let datosExtra = extraData.data.results;
 
@@ -160,8 +153,46 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send('Jarvis-Libre optimizado, eliminando velas abiertas y con retroceso inteligente para el MACD.'));
+// Short Volume Diario en JSON
+app.get('/short-volume/:symbol', async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    const fecha = req.query.fecha;
+
+    if (!fecha) {
+        return res.status(400).json({ error: "Debes proporcionar una fecha en formato YYYY-MM-DD" });
+    }
+
+    const url = `https://api.polygon.io/v3/reference/shorts/${symbol}/volume?date=${fecha}&apiKey=${POLYGON_API_KEY}`;
+
+    try {
+        const response = await axios.get(url);
+        const data = response.data.results || [];
+        res.json({ symbol, fecha, shortVolume: data });
+    } catch (err) {
+        console.error(`Error Short Volume ${symbol}: ${err.message}`);
+        res.status(500).json({ error: "Datos no disponibles o activo sin short volume" });
+    }
+});
+
+// Short Interest Bi-mensual en JSON
+app.get('/short-interest/:symbol', async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    const limit = req.query.limit || 10;
+
+    const url = `https://api.polygon.io/v3/reference/shorts/${symbol}/interest?limit=${limit}&apiKey=${POLYGON_API_KEY}`;
+
+    try {
+        const response = await axios.get(url);
+        const data = response.data.results || [];
+        res.json({ symbol, shortInterest: data });
+    } catch (err) {
+        console.error(`Error Short Interest ${symbol}: ${err.message}`);
+        res.status(500).json({ error: "Datos no disponibles o activo sin short interest" });
+    }
+});
+
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo, análisis técnico, velas protegidas, MACD forzado y short data activado.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor listo con protección de velas abiertas y MACD forzado si el histórico lo permite.`);
+    console.log(`🚀 Servidor operativo en puerto ${PORT} con Short Volume y Short Interest activados.`);
 });
