@@ -62,9 +62,13 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const hoy = new Date().toISOString().split('T')[0];
     const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
 
+    console.log(`[INFO] URL Market Data: ${url}`);
+
     try {
         const resPrecio = await axios.get(url);
         let datos = resPrecio.data.results;
+        console.log(`[DATA] Respuesta Market Data:`, datos);
+
         if (!datos || datos.length === 0) return res.status(404).json({ error: "Sin datos en ese timeframe" });
 
         let ohlcCompleto = datos.map(c => ({
@@ -87,6 +91,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 
         const resFundamental = await axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
         const datosFund = resFundamental.data.results || {};
+        console.log(`[DATA] Datos Fundamentales:`, datosFund);
 
         res.json({
             symbol, timeframe, precioActual: precios.at(-1),
@@ -101,7 +106,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         });
 
     } catch (err) {
-        console.error(`Error ${symbol}: ${err.message}`);
+        console.error(`[ERROR] Market Data ${symbol}: ${err.message}`);
         res.status(500).json({ error: "Datos no disponibles" });
     }
 });
@@ -117,14 +122,17 @@ app.get('/short-volume/:symbol', async (req, res) => {
     const inicio = hace6Meses.toISOString().split('T')[0];
 
     const url = `https://api.polygon.io/v3/reference/shorts/${symbol}/volume?date.gte=${inicio}&date.lte=${hoy}&apiKey=${POLYGON_API_KEY}`;
+    console.log(`[INFO] URL Short Volume: ${url}`);
 
     try {
         const respuesta = await axios.get(url);
+        console.log(`[DATA] Respuesta Short Volume:`, respuesta.data);
+
         if (!respuesta.data || !respuesta.data.results) return res.status(404).json({ error: "Datos no disponibles o activo sin short volume" });
         res.json(respuesta.data.results);
 
     } catch (err) {
-        console.error(`Error Short Volume ${symbol}: ${err.message}`);
+        console.error(`[ERROR] Short Volume ${symbol}: ${err.message}`);
         res.status(500).json({ error: "Datos no disponibles o activo sin short volume" });
     }
 });
@@ -140,22 +148,25 @@ app.get('/short-interest/:symbol', async (req, res) => {
     const inicio = hace12Meses.toISOString().split('T')[0];
 
     const url = `https://api.polygon.io/v3/reference/shorts/${symbol}/interest?settlement_date.gte=${inicio}&settlement_date.lte=${hoy}&apiKey=${POLYGON_API_KEY}`;
+    console.log(`[INFO] URL Short Interest: ${url}`);
 
     try {
         const respuesta = await axios.get(url);
+        console.log(`[DATA] Respuesta Short Interest:`, respuesta.data);
+
         if (!respuesta.data || !respuesta.data.results) return res.status(404).json({ error: "Datos no disponibles o activo sin short interest" });
         res.json(respuesta.data.results);
 
     } catch (err) {
-        console.error(`Error Short Interest ${symbol}: ${err.message}`);
+        console.error(`[ERROR] Short Interest ${symbol}: ${err.message}`);
         res.status(500).json({ error: "Datos no disponibles o activo sin short interest" });
     }
 });
 
 // -------------------- Bienvenida -----------------------------
 
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo, MACD protegido, Short Volume e Interest activos en modo JSON.'));
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo, con pruebas activadas para Market Data, Short Volume e Interest.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor en puerto ${PORT} listo, Short Volume y Short Interest activados.`);
+    console.log(`🚀 Servidor en puerto ${PORT} listo, modo pruebas activado.`);
 });
