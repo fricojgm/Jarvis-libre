@@ -51,6 +51,18 @@ app.get('/debug-hora', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
+async function obtenerPrecioTiempoReal(symbol) {
+    try {
+        const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
+        const res = await axios.get(url);
+        if (res.data?.results?.p) return res.data.results.p;
+        throw new Error('Precio tiempo real no disponible');
+    } catch (err) {
+        console.error(`Error obteniendo precio en tiempo real ${symbol}:`, err.message);
+        return "N/A";
+    }
+}
+
 function calcularRSI(precios) {
     let ganancias = 0, perdidas = 0;
     for (let i = 1; i <= 14; i++) {
@@ -243,8 +255,11 @@ if (horaNY < apertura) {
     const siguienteApertura = new Date(apertura); siguienteApertura.setDate(siguienteApertura.getDate() + 1);
     tiempoParaEvento = `${Math.floor((siguienteApertura - horaNY) / (1000 * 60))} min para apertura siguiente`;
 }
+        const precioRealVivo = await obtenerPrecioTiempoReal(symbol);
+
         res.json({
-            symbol, timeframe, precioActual: precios.at(-1),
+            symbol, timeframe,
+            precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
             historico: precios.slice(-cantidad),
             rsi, macd, patron, atr, adx, vwap,
             bollingerBands: bb,
