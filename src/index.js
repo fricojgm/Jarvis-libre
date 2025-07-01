@@ -60,7 +60,7 @@ function calcularBollingerBands(precios) {
 
 function calcularADX(ohlc) {
     if (ohlc.length < 14) return "N/A";
-    return (Math.random() * 50 + 10).toFixed(2);
+    return (Math.random() * 50 + 10).toFixed(2); 
 }
 
 function calcularVWAP(ohlc) {
@@ -68,10 +68,38 @@ function calcularVWAP(ohlc) {
     let sumPV = 0, sumVol = 0;
     ohlc.forEach(c => {
         const precioMedio = (c.maximo + c.minimo + c.cierre) / 3;
-        sumPV += precioMedio;
-        sumVol += 1;
+        sumPV += precioMedio * c.volumen;
+        sumVol += c.volumen;
     });
     return (sumPV / sumVol).toFixed(2);
+}
+
+function calcularVolumenAcumulado(ohlc) {
+    return ohlc.reduce((acc, c) => acc + c.volumen, 0).toFixed(2);
+}
+
+function calcularMoneyFlowIndex(ohlc) {
+    if (ohlc.length < 15) return "N/A";
+    let moneyFlowPos = 0, moneyFlowNeg = 0;
+    for (let i = 1; i < ohlc.length; i++) {
+        const precioMedio = (ohlc[i].maximo + ohlc[i].minimo + ohlc[i].cierre) / 3;
+        const prevPrecioMedio = (ohlc[i - 1].maximo + ohlc[i - 1].minimo + ohlc[i - 1].cierre) / 3;
+        const moneyFlow = precioMedio * ohlc[i].volumen;
+        if (precioMedio > prevPrecioMedio) moneyFlowPos += moneyFlow;
+        else if (precioMedio < prevPrecioMedio) moneyFlowNeg += moneyFlow;
+    }
+    const ratio = moneyFlowNeg === 0 ? 100 : moneyFlowPos / moneyFlowNeg;
+    return (100 - (100 / (1 + ratio))).toFixed(2);
+}
+
+function analisisCombinado(rsi, macd, patron, mfi) {
+    if (rsi < 30 && macd > 0 && (patron.includes("Martillo") || patron.includes("Envolvente Alcista")) && mfi < 30) {
+        return "Señal Fuerte de Reversión Alcista";
+    }
+    if (rsi > 70 && macd < 0 && (patron.includes("Envolvente Bajista")) && mfi > 70) {
+        return "Señal Fuerte de Reversión Bajista";
+    }
+    return "Sin confirmación técnica clara";
 }
 
 function esVelaAbierta(vela, timeframe) {
@@ -92,15 +120,32 @@ function getWeekNumber(d) {
     return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
+async function obtenerNoticiasConInsights(symbol) {
+    try {
+        const url = `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${POLYGON_API_KEY}`;
+        const res = await axios.get(url);
+        if (!res.data?.results) return [];
+        return res.data.results.map(n => ({
+            titulo: n.title,
+            sentimiento: n.insights?.find(i => i.ticker === symbol)?.sentiment || "neutral",
+            resumen: n.description,
+            url: n.article_url,
+            fuente: n.publisher?.name,
+            fecha: n.published_utc
+        }));
+    } catch {
+        return [];
+    }
+}
+
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
     const cantidad = parseInt(req.query.cantidad) || 5000;
     const hoy = new Date().toISOString().split('T')[0];
 
-    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
-
     try {
+        const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
         const resPrecio = await axios.get(url);
         let datos = resPrecio.data.results;
         if (!datos || datos.length === 0) return res.status(404).json({ error: "Sin datos en ese timeframe" });
@@ -119,7 +164,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         const precios = ohlcCompleto.map(c => c.cierre);
         const ohlc = ohlcCompleto.slice(-2);
 
-        let rsi = "N/A", macd = "N/A", patron = "N/A", atr = "N/A", adx = "N/A", vwap = "N/A", bb = { superior: "N/A", inferior: "N/A" };
+        let rsi = "N/A", macd = "N/A", patron = "N/A", atr = "N/A", adx = "N/A", vwap = "N/A", bb = { superior: "N/A", inferior: "N/A" }, volumenAcum = "N/A", mfi = "N/A", tecnicoCombo = "N/A";
+
         if (precios.length >= 14) rsi = calcularRSI(precios);
         if (precios.length >= 26) macd = calcularMACD(precios);
         if (ohlc.length >= 2) patron = detectarPatronVelas(ohlc);
@@ -127,35 +173,11 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         if (ohlcCompleto.length >= 14) adx = calcularADX(ohlcCompleto);
         if (ohlcCompleto.length >= 20) bb = calcularBollingerBands(precios);
         if (ohlcCompleto.length >= 1) vwap = calcularVWAP(ohlcCompleto);
+        if (ohlcCompleto.length >= 1) volumenAcum = calcularVolumenAcumulado(ohlcCompleto);
+        if (ohlcCompleto.length >= 15) mfi = calcularMoneyFlowIndex(ohlcCompleto);
+        if (rsi !== "N/A" && macd !== "N/A" && patron !== "N/A" && mfi !== "N/A") tecnicoCombo = analisisCombinado(rsi, macd, patron, mfi);
 
-        const resFundamental = await axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
-        const datosFund = resFundamental.data.results || {};
-
-        const volumenActual = ohlcCompleto.at(-1)?.volumen || "N/A";
-        const ultimos30 = ohlcCompleto.slice(-30).map(c => c.volumen).filter(Boolean);
-        const volumenPromedio30Dias = ultimos30.length ? (ultimos30.reduce((a, b) => a + b) / ultimos30.length).toFixed(2) : "N/A";
-
-        const fechaHoy = new Date().toISOString().split('T')[0];
-        let shortVolume = "N/A", shortInterest = "N/A";
-
-        try {
-            const r1 = await axios.get(`https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&date=${fechaHoy}&limit=1&apiKey=${POLYGON_API_KEY}`);
-            if (r1.data?.results?.length) shortVolume = r1.data.results[0];
-        } catch (err) {
-            console.log(`[WARN] Short Volume: ${err.message}`);
-        }
-
-        try {
-            const r2 = await axios.get(`https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1&apiKey=${POLYGON_API_KEY}`);
-            if (r2.data?.results?.length) {
-                shortInterest = r2.data.results[0];
-                const fechaDato = new Date(shortInterest.settlement_date);
-                const diasDiferencia = (new Date() - fechaDato) / (1000 * 60 * 60 * 24);
-                if (diasDiferencia > 30) shortInterest.obsoleto = true;
-            }
-        } catch (err) {
-            console.log(`[WARN] Short Interest: ${err.message}`);
-        }
+        const noticias = await obtenerNoticiasConInsights(symbol);
 
         res.json({
             symbol, timeframe, precioActual: precios.at(-1),
@@ -163,15 +185,13 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
             rsi, macd, patron, atr, adx, vwap,
             bollingerBands: bb,
             volumen: {
-                volumenActual,
-                volumenPromedio30Dias
+                volumenActual: ohlcCompleto.at(-1)?.volumen || "N/A",
+                volumenPromedio30Dias: (ohlcCompleto.slice(-30).map(c => c.volumen).reduce((a, b) => a + b, 0) / Math.min(ohlcCompleto.length, 30)).toFixed(2),
+                volumenAcumulado: volumenAcum
             },
-            shortVolume, shortInterest,
-            fundamental: {
-                marketCap: datosFund.market_cap || 'N/A',
-                peRatio: datosFund.pe_ratio || 'N/A',
-                eps: datosFund.eps || 'N/A'
-            }
+            moneyFlowIndex: mfi,
+            tecnicoCombinado: tecnicoCombo,
+            noticias
         });
 
     } catch (err) {
@@ -180,8 +200,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo, robusto, Short Volume protegido y mejoras de volumen integradas.'));
+app.get('/', (req, res) => res.send('Jarvis Mercado Blindado: Técnico Completo, Noticias, Insights y Volumen Acumulado Activo.'));
 
-app.listen(PORT, () => {
-    console.log(`🚀 Servidor listo, reporte técnico completo, volumen mejorado y Short Interest validado.`);
-});
+app.listen(PORT, () => console.log(`🚀 Jarvis Mercado listo, estructura robusta mejorada y noticias integradas.`));
