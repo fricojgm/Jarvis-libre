@@ -26,6 +26,28 @@ setInterval(sincronizarHoraNY, INTERVALO_HORA);
 sincronizarHoraNY();
 const app = express();
 
+app.get('/debug-hora', async (req, res) => {
+    const horaInterna = obtenerHoraBlindadaNY();
+    
+    try {
+        const resAPI = await axios.get(`https://worldtimeapi.org/api/timezone/America/New_York`);
+        const horaOficialNY = new Date(resAPI.data.datetime);
+        
+        res.json({
+            horaInterna: horaInterna.toISOString(),
+            horaOficialNY: horaOficialNY.toISOString(),
+            diferenciaSegundos: Math.abs((horaInterna - horaOficialNY) / 1000).toFixed(2),
+            mensaje: "Comparación completa. Si la diferencia es mínima, todo está alineado."
+        });
+    } catch (err) {
+        res.json({
+            horaInterna: horaInterna.toISOString(),
+            horaOficialNY: "No se pudo obtener del servidor externo",
+            mensaje: "Sistema usando hora local ajustada, intenta sincronizar cada 30 min."
+        });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
