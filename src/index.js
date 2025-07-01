@@ -93,7 +93,7 @@ function getWeekNumber(d) {
     return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
-// --- Endpoint Principal ---
+// Endpoint Principal Mejorado
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
@@ -112,7 +112,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
             apertura: c.o,
             maximo: c.h,
             minimo: c.l,
-            cierre: c.c
+            cierre: c.c,
+            volumen: c.v
         })).reverse();
 
         if (ohlcCompleto.length > 0 && esVelaAbierta(ohlcCompleto.at(-1), timeframe)) ohlcCompleto.pop();
@@ -131,6 +132,11 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 
         const resFundamental = await axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
         const datosFund = resFundamental.data.results || {};
+
+        // Volumen actual y promedio 30 días
+        const volumenActual = ohlcCompleto.at(-1)?.volumen || "N/A";
+        const ultimos30 = ohlcCompleto.slice(-30).map(c => c.volumen).filter(Boolean);
+        const volumenPromedio30Dias = ultimos30.length ? (ultimos30.reduce((a, b) => a + b) / ultimos30.length).toFixed(2) : "N/A";
 
         // Short Volume e Interest protegidos
         const fechaHoy = new Date().toISOString().split('T')[0];
@@ -151,6 +157,10 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
             historico: precios.slice(-cantidad),
             rsi, macd, patron, atr, adx, vwap,
             bollingerBands: bb,
+            volumen: {
+                volumenActual,
+                volumenPromedio30Dias
+            },
             shortVolume, shortInterest,
             fundamental: {
                 marketCap: datosFund.market_cap || 'N/A',
@@ -165,9 +175,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-// Bienvenida
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo, reporte técnico robusto y Short Volume protegido.'));
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo, ahora con volumen real y datos robustos integrados.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor listo, reporte integral con indicadores avanzados y Short Volume automatizado.`);
+    console.log(`🚀 Servidor listo, reporte técnico mejorado, volumen real y Short Volume protegidos.`);
 });
