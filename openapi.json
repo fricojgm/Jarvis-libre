@@ -1,0 +1,52 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Jarvis-Libre API",
+    "version": "1.0.0",
+    "description": "API oficial de Jarvis-Libre con Reporte Técnico, Short Volume, Short Interest y futuros indicadores."
+  },
+  "servers": [
+    { "url": "https://jarvis-libre.onrender.com", "description": "Servidor en Render" }
+  ],
+  "paths": {
+    "/reporte-mercado/{symbol}": {
+      "get": {
+        "summary": "Reporte Técnico Integral",
+        "parameters": [
+          { "name": "symbol", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Ticker de la acción (ej. AAPL)" },
+          { "name": "timeframe", "in": "query", "required": false, "schema": { "type": "string", "default": "day" }, "description": "Temporalidad: day, week, month, year" },
+          { "name": "cantidad", "in": "query", "required": false, "schema": { "type": "integer", "default": 5000 }, "description": "Cantidad de velas históricas" }
+        ],
+        "responses": {
+          "200": { "description": "Reporte técnico con indicadores y datos fundamentales" },
+          "404": { "description": "Sin datos en ese timeframe" }
+        }
+      }
+    },
+    "/short-volume/{symbol}": {
+      "get": {
+        "summary": "Consulta de Short Volume",
+        "parameters": [
+          { "name": "symbol", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Ticker de la acción" },
+          { "name": "fecha", "in": "query", "required": false, "schema": { "type": "string", "format": "date" }, "description": "Fecha específica (YYYY-MM-DD)" }
+        ],
+        "responses": {
+          "200": { "description": "Short Volume encontrado" },
+          "404": { "description": "Datos no disponibles" }
+        }
+      }
+    },
+    "/short-interest/{symbol}": {
+      "get": {
+        "summary": "Consulta de Short Interest",
+        "parameters": [
+          { "name": "symbol", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Ticker de la acción" }
+        ],
+        "responses": {
+          "200": { "description": "Short Interest encontrado" },
+          "404": { "description": "Datos no disponibles" }
+        }
+      }
+    }
+  }
+}

@@ -5,7 +5,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
-// ---- CÁLCULOS TÉCNICOS ----
+// Cálculos Técnicos
 function calcularRSI(precios) {
     let ganancias = 0, perdidas = 0;
     for (let i = 1; i <= 14; i++) {
@@ -93,7 +93,7 @@ function getWeekNumber(d) {
     return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
-// ---- ENDPOINT REPORTE COMPLETO ----
+// --- Endpoint Principal ---
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
     const timeframe = req.query.timeframe || 'day';
@@ -132,20 +132,19 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         const resFundamental = await axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`);
         const datosFund = resFundamental.data.results || {};
 
+        // Short Volume e Interest protegidos
         const fechaHoy = new Date().toISOString().split('T')[0];
-        const shortVolUrl = `https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&date=${fechaHoy}&limit=1&apiKey=${POLYGON_API_KEY}`;
-        const shortIntUrl = `https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1&apiKey=${POLYGON_API_KEY}`;
-
         let shortVolume = "N/A", shortInterest = "N/A";
-        try {
-            const r1 = await axios.get(shortVolUrl);
-            shortVolume = r1.data.results?.[0] || "N/A";
-        } catch { }
 
         try {
-            const r2 = await axios.get(shortIntUrl);
-            shortInterest = r2.data.results?.[0] || "N/A";
-        } catch { }
+            const r1 = await axios.get(`https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&date=${fechaHoy}&limit=1&apiKey=${POLYGON_API_KEY}`);
+            if (r1.data?.results?.length) shortVolume = r1.data.results[0];
+        } catch (err) { console.log(`[WARN] Short Volume: ${err.message}`); }
+
+        try {
+            const r2 = await axios.get(`https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1&apiKey=${POLYGON_API_KEY}`);
+            if (r2.data?.results?.length) shortInterest = r2.data.results[0];
+        } catch (err) { console.log(`[WARN] Short Interest: ${err.message}`); }
 
         res.json({
             symbol, timeframe, precioActual: precios.at(-1),
@@ -166,8 +165,9 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => res.send('Jarvis-Libre operativo, con Reporte Integral técnico completo y datos automáticos.'));
+// Bienvenida
+app.get('/', (req, res) => res.send('Jarvis-Libre operativo, reporte técnico robusto y Short Volume protegido.'));
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor en puerto ${PORT} listo, con todos los indicadores y Short Volume e Interest activos.`);
+    console.log(`🚀 Servidor listo, reporte integral con indicadores avanzados y Short Volume automatizado.`);
 });
