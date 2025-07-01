@@ -225,6 +225,24 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 
         const noticias = await obtenerNoticiasConInsights(symbol);
 
+// Hora y estado de mercado
+const horaNY = obtenerHoraBlindadaNY();
+const horaLocal = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Santo_Domingo" }));
+const apertura = new Date(horaNY); apertura.setHours(9, 30, 0, 0);
+const cierre = new Date(horaNY); cierre.setHours(16, 0, 0, 0);
+
+let estado = "Cerrado", tiempoParaEvento = "N/A";
+if (horaNY < apertura) {
+    estado = "Pre-market";
+    tiempoParaEvento = `${Math.floor((apertura - horaNY) / (1000 * 60))} min para apertura`;
+} else if (horaNY >= apertura && horaNY <= cierre) {
+    estado = "Abierto";
+    tiempoParaEvento = `${Math.floor((cierre - horaNY) / (1000 * 60))} min para cierre`;
+} else {
+    estado = "Post-market";
+    const siguienteApertura = new Date(apertura); siguienteApertura.setDate(siguienteApertura.getDate() + 1);
+    tiempoParaEvento = `${Math.floor((siguienteApertura - horaNY) / (1000 * 60))} min para apertura siguiente`;
+}
         res.json({
             symbol, timeframe, precioActual: precios.at(-1),
             historico: precios.slice(-cantidad),
@@ -237,7 +255,13 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
             },
             moneyFlowIndex: mfi,
             tecnicoCombinado: tecnicoCombo,
-            noticias
+            noticias,
+	    horaNY: horaNY.toISOString(),
+            horaLocal: horaLocal.toISOString(),
+            mercado: {
+             estado,
+             tiempoParaEvento
+           }
         });
 
     } catch (err) {
