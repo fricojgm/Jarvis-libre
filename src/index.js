@@ -78,7 +78,7 @@ async function obtenerFundamentales(symbol) {
             };
         }
 
-        const d = lista[0];
+        const d = res.data.results?. [0] || {}; 
 
         return {
             marketCap: d.market_cap || "N/A",
