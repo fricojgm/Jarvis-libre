@@ -178,6 +178,36 @@ function getWeekNumber(d) {
     return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
+async function obtenerResumenDiario(symbol, fecha) {
+    try {
+        const url = `https://api.polygon.io/v1/open-close/${symbol}/${fecha}?adjusted=true&apiKey=${POLYGON_API_KEY}`;
+        const res = await axios.get(url);
+        const d = res.data;
+
+        return {
+            apertura: d.open ?? "N/A",
+            maximo: d.high ?? "N/A",
+            minimo: d.low ?? "N/A",
+            cierre: d.close ?? "N/A",
+            volumen: d.volume ?? "N/A",
+            afterHours: d.afterHours ?? "N/A",
+            preMarket: d.preMarket ?? "N/A"
+        };
+
+    } catch (err) {
+        console.error(`Error Resumen Diario ${symbol}:`, err.message);
+        return {
+            apertura: "N/A",
+            maximo: "N/A",
+            minimo: "N/A",
+            cierre: "N/A",
+            volumen: "N/A",
+            afterHours: "N/A",
+            preMarket: "N/A"
+        };
+    }
+}
+
 async function obtenerNoticiasConInsights(symbol) {
     try {
         const url = `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${POLYGON_API_KEY}`;
@@ -201,6 +231,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const timeframe = req.query.timeframe || 'day';
     const cantidad = parseInt(req.query.cantidad) || 5000;
     const hoy = new Date().toISOString().split('T')[0];
+    const resumenDiario = await obtenerResumenDiario(symbol, hoy);
 
     try {
         const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
@@ -268,6 +299,14 @@ if (horaNY < apertura) {
                 volumenPromedio30Dias: (ohlcCompleto.slice(-30).map(c => c.volumen).reduce((a, b) => a + b, 0) / Math.min(ohlcCompleto.length, 30)).toFixed(2),
                 volumenAcumulado: volumenAcum
             },
+
+            afterHours: resumenDiario.afterHours,
+            preMarket: resumenDiario.preMarket,
+            aperturaDiaAnterior: resumenDiario.apertura,
+            minimoDiaAnterior: resumenDiario.minimo,
+            maximoDiaAnterior: resumenDiario.maximo,
+            volumenResumenDiario: resumenDiario.volumen,
+
             moneyFlowIndex: mfi,
             tecnicoCombinado: tecnicoCombo,
             noticias,
