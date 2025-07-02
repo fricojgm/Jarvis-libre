@@ -65,8 +65,8 @@ async function obtenerPrecioTiempoReal(symbol) {
 
 async function obtenerShortData(symbol) {
     try {
-        const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?limit=100&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
-        const urlVolume = `https://api.polygon.io/stocks/v1/short-volume?limit=100&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
+        const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?limit=500&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
+        const urlVolume = `https://api.polygon.io/stocks/v1/short-volume?limit=500&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
 
         const [resInterest, resVolume] = await Promise.all([
             axios.get(urlInterest),
