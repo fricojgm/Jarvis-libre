@@ -63,6 +63,36 @@ async function obtenerPrecioTiempoReal(symbol) {
     }
 }
 
+async function obtenerShortData(symbol) {
+    try {
+        const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?limit=100&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
+        const urlVolume = `https://api.polygon.io/stocks/v1/short-volume?limit=100&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
+
+        const [resInterest, resVolume] = await Promise.all([
+            axios.get(urlInterest),
+            axios.get(urlVolume)
+        ]);
+
+        const listaInterest = resInterest.data.results || [];
+        const listaVolume = resVolume.data.results || [];
+
+        const datoInterest = listaInterest.find(d => d.ticker === symbol);
+        const datoVolume = listaVolume.find(d => d.ticker === symbol);
+
+        return {
+            shortInterestTotal: datoInterest ? datoInterest.short_interest : "N/A",
+            shortVolumeTotal: datoVolume ? datoVolume.short_volume : "N/A"
+        };
+
+    } catch (err) {
+        console.error(`Error Short Data ${symbol}:`, err.message);
+        return {
+            shortInterestTotal: "N/A",
+            shortVolumeTotal: "N/A"
+        };
+    }
+}
+
 function calcularRSI(precios) {
     let ganancias = 0, perdidas = 0;
     for (let i = 1; i <= 14; i++) {
@@ -231,7 +261,12 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const timeframe = req.query.timeframe || 'day';
     const cantidad = parseInt(req.query.cantidad) || 5000;
     const hoy = new Date().toISOString().split('T')[0];
+    const ayer = new Date();
+    ayer.setDate(ayer.getDate() - 1);
+    const fechaAyer = ayer.toISOString().split('T')[0];
     const resumenDiario = await obtenerResumenDiario(symbol, hoy);
+    const resumenAyer = await obtenerResumenDiario(symbol, fechaAyer);
+    const shortData = await obtenerShortData(symbol);
 
     try {
         const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
@@ -294,6 +329,7 @@ if (horaNY < apertura) {
             historico: precios.slice(-cantidad),
             rsi, macd, patron, atr, adx, vwap,
             bollingerBands: bb,
+
             volumen: {
                 volumenActual: ohlcCompleto.at(-1)?.volumen || "N/A",
                 volumenPromedio30Dias: (ohlcCompleto.slice(-30).map(c => c.volumen).reduce((a, b) => a + b, 0) / Math.min(ohlcCompleto.length, 30)).toFixed(2),
@@ -302,11 +338,13 @@ if (horaNY < apertura) {
 
             afterHours: resumenDiario.afterHours,
             preMarket: resumenDiario.preMarket,
-            aperturaDiaAnterior: resumenDiario.apertura,
-            minimoDiaAnterior: resumenDiario.minimo,
-            maximoDiaAnterior: resumenDiario.maximo,
+            aperturaDiaAnterior: resumenAyer.apertura,
+            minimoDiaAnterior: resumenAyer.minimo,
+            maximoDiaAnterior: resumenAyer.maximo,
+            cierreDiaAnterior: resumenAyer.cierre,
             volumenResumenDiario: resumenDiario.volumen,
-
+            shortInterest: shortData.shortInterestTotal,
+            shortVolume: shortData.shortVolumeTotal,
             moneyFlowIndex: mfi,
             tecnicoCombinado: tecnicoCombo,
             noticias,
