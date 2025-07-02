@@ -67,11 +67,22 @@ async function obtenerFundamentales(symbol) {
     try {
         const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`;
         const res = await axios.get(url);
-        const d = res.data.results?.[0] || {};
+        const lista = res.data.results || [];
+
+        if (lista.length === 0) {
+            console.warn(`Sin datos fundamentales para ${symbol}`);
+            return {
+                marketCap: "N/A",
+                eps: "N/A",
+                peRatio: "N/A"
+            };
+        }
+
+        const d = lista[0];
 
         return {
             marketCap: d.market_cap || "N/A",
-            eps: d.eps_basic || "N/A",
+            eps: d.financials?.income_statement?.basic_earnings_per_share?.value || "N/A",
             peRatio: d.pe_ratio || "N/A"
         };
 
