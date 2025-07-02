@@ -95,9 +95,9 @@ async function obtenerShortData(symbol) {
         const resInterest = await axios.get(urlInterest);
         const listaInterest = resInterest.data.results || [];
 
-        const datosAAPL = listaInterest.filter(d => d.ticker === symbol);
+        const datosFiltrados = listaInterest.filter(d => d.ticker === symbol);
 
-        const registroReciente = datosAAPL.length > 0 ? datosAAPL[0] : null;
+        const registroReciente = datosFiltrados.length > 0 ? datosFiltrados[0] : null;
 
         return {
             shortInterestTotal: registroReciente ? registroReciente.short_interest : "N/A",
@@ -345,6 +345,7 @@ if (horaNY < apertura) {
     tiempoParaEvento = `${Math.floor((siguienteApertura - horaNY) / (1000 * 60))} min para apertura siguiente`;
 }
         const precioRealVivo = await obtenerPrecioTiempoReal(symbol);
+        const fundamentales = await obtenerFundamentales(symbol, precioRealVivo);
 
         res.json({
             symbol, timeframe,
