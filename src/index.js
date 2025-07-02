@@ -63,6 +63,28 @@ async function obtenerPrecioTiempoReal(symbol) {
     }
 }
 
+async function obtenerFundamentales(symbol) {
+    try {
+        const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`;
+        const res = await axios.get(url);
+        const d = res.data.results?.[0] || {};
+
+        return {
+            marketCap: d.market_cap || "N/A",
+            eps: d.eps_basic || "N/A",
+            peRatio: d.pe_ratio || "N/A"
+        };
+
+    } catch (err) {
+        console.error(`Error Fundamentales ${symbol}:`, err.message);
+        return {
+            marketCap: "N/A",
+            eps: "N/A",
+            peRatio: "N/A"
+        };
+    }
+}
+
 async function obtenerShortData(symbol) {
     try {
         const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?limit=10000&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
@@ -264,6 +286,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const resumenDiario = await obtenerResumenDiario(symbol, hoy);
     const resumenAyer = await obtenerResumenDiario(symbol, fechaAyer);
     const shortData = await obtenerShortData(symbol);
+    const fundamentales = await obtenerFundamentales(symbol);
 
     try {
         const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
@@ -326,6 +349,12 @@ if (horaNY < apertura) {
             historico: precios.slice(-cantidad),
             rsi, macd, patron, atr, adx, vwap,
             bollingerBands: bb,
+
+           fundamentales: {
+               marketCap: fundamentales.marketCap,
+               eps: fundamentales.eps,
+               peRatio: fundamentales.peRatio
+           },
 
             volumen: {
                 volumenActual: ohlcCompleto.at(-1)?.volumen || "N/A",
