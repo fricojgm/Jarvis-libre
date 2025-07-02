@@ -65,23 +65,38 @@ async function obtenerPrecioTiempoReal(symbol) {
 
 async function obtenerShortData(symbol) {
     try {
-        const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?limit=500&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
-        const urlVolume = `https://api.polygon.io/stocks/v1/short-volume?limit=500&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
+        let shortInterestTotal = "N/A";
+        let shortVolumeTotal = "N/A";
+        let hasMore = true;
+        let page = 1;
 
-        const [resInterest, resVolume] = await Promise.all([
-            axios.get(urlInterest),
-            axios.get(urlVolume)
-        ]);
+        while (hasMore) {
+            const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?limit=500&page=${page}&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
+            const urlVolume = `https://api.polygon.io/stocks/v1/short-volume?limit=500&page=${page}&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
 
-        const listaInterest = resInterest.data.results || [];
-        const listaVolume = resVolume.data.results || [];
+            const [resInterest, resVolume] = await Promise.all([
+                axios.get(urlInterest),
+                axios.get(urlVolume)
+            ]);
 
-        const datoInterest = listaInterest.find(d => d.ticker === symbol);
-        const datoVolume = listaVolume.find(d => d.ticker === symbol);
+            const listaInterest = resInterest.data.results || [];
+            const listaVolume = resVolume.data.results || [];
+
+            const datoInterest = listaInterest.find(d => d.ticker === symbol);
+            const datoVolume = listaVolume.find(d => d.ticker === symbol);
+
+            if (datoInterest) shortInterestTotal = datoInterest.short_interest;
+            if (datoVolume) shortVolumeTotal = datoVolume.short_volume;
+
+            if (datoInterest && datoVolume) break;
+
+            hasMore = listaInterest.length === 500 || listaVolume.length === 500;
+            page++;
+        }
 
         return {
-            shortInterestTotal: datoInterest ? datoInterest.short_interest : "N/A",
-            shortVolumeTotal: datoVolume ? datoVolume.short_volume : "N/A"
+            shortInterestTotal: shortInterestTotal || "N/A",
+            shortVolumeTotal: shortVolumeTotal || "N/A"
         };
 
     } catch (err) {
