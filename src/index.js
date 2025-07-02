@@ -90,7 +90,7 @@ async function obtenerShortData(symbol) {
 
             if (datoInterest && datoVolume) break;
 
-            hasMore = listaInterest.length === 500 || listaVolume.length === 500;
+            hasMore = (listaInterest.length === 500 || listaVolume.length === 500) && (!datoInterest || !datoVolume);
             page++;
         }
 
