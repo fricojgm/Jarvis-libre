@@ -65,30 +65,27 @@ async function obtenerPrecioTiempoReal(symbol) {
 
 async function obtenerShortData(symbol) {
     try {
-        const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?limit=500&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
-        const urlVolume = `https://api.polygon.io/stocks/v1/short-volume?limit=500&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
+        const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?limit=10000&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
 
-        const [resInterest, resVolume] = await Promise.all([
-            axios.get(urlInterest),
-            axios.get(urlVolume)
-        ]);
-
+        const resInterest = await axios.get(urlInterest);
         const listaInterest = resInterest.data.results || [];
-        const listaVolume = resVolume.data.results || [];
 
-        const datoInterest = listaInterest.find(d => d.ticker === symbol);
-        const datoVolume = listaVolume.find(d => d.ticker === symbol);
+        const datosAAPL = listaInterest.filter(d => d.ticker === symbol);
+
+        const registroReciente = datosAAPL.length > 0 ? datosAAPL[0] : null;
 
         return {
-            shortInterestTotal: datoInterest ? datoInterest.short_interest : "N/A",
-            shortVolumeTotal: datoVolume ? datoVolume.short_volume : "N/A"
+            shortInterestTotal: registroReciente ? registroReciente.short_interest : "N/A",
+            avgDailyVolume: registroReciente ? registroReciente.avg_daily_volume : "N/A",
+            daysToCover: registroReciente ? registroReciente.days_to_cover : "N/A"
         };
 
     } catch (err) {
         console.error(`Error Short Data ${symbol}:`, err.message);
         return {
             shortInterestTotal: "N/A",
-            shortVolumeTotal: "N/A"
+            avgDailyVolume: "N/A",
+            daysToCover: "N/A"
         };
     }
 }
@@ -344,7 +341,8 @@ if (horaNY < apertura) {
             cierreDiaAnterior: resumenAyer.cierre,
             volumenResumenDiario: resumenDiario.volumen,
             shortInterest: shortData.shortInterestTotal,
-            shortVolume: shortData.shortVolumeTotal,
+            avgDailyVolume: shortData.avgDailyVolume,
+            daysToCover: shortData.daysToCover,
             moneyFlowIndex: mfi,
             tecnicoCombinado: tecnicoCombo,
             noticias,
