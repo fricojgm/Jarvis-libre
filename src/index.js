@@ -409,6 +409,7 @@ if (horaNY < apertura) {
                 diario: velasDiario,
                 semanal: velasSemanal,
                 mensual: velasMensual
+                hora: velas.hora
             },
 
            fundamentales: {
