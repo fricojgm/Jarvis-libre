@@ -112,7 +112,7 @@ async function obtenerShortData(symbol) {
 // Short Volume Diario
 async function obtenerShortVolume(symbol) {
     try {
-        const urlVolume = `https://api.polygon.io/v1/stocks/short-volume?ticker=${symbol}&limit=1&sort=date.desc&apiKey=${POLYGON_API_KEY}`;
+        const urlVolume = `https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&limit=10&sort=ticker.desc&apiKey=${POLYGON_API_KEY}`;
         const resVolume = await axios.get(urlVolume);
         const ultimo = resVolume.data?.results?.[0] || null;
 
