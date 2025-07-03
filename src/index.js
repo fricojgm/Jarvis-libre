@@ -8,7 +8,7 @@ async function sincronizarHoraNY() {
     try {
         const res = await axios.get(`https://worldtimeapi.org/api/timezone/${ZONA_NY}`);
         horaNY = new Date(res.data.datetime);
-        console.log(`🕒 Hora NY correctamente: ${horaNY.toLocaleString("en-US", { timeZone: ZONA_NY }}}`);
+        console.log(`🕒 Hora NY correctamente: ${horaNY.toLocaleString("en-US", { timeZone: ZONA_NY })}`);
     } catch (err) {
         console.log(`[WARN] No se pudo actualizar hora NY, usando fallback local`);
     }
