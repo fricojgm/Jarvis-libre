@@ -406,9 +406,9 @@ if (horaNY < apertura) {
             rsi, macd, patron, atr, adx, vwap,
             bollingerBands: bb,
             velas: {
-                diario: velasDiario,
-                semanal: velasSemanal,
-                mensual: velasMensual
+                diario: velas.diario,
+                semanal: velas.semanal,
+                mensual: velas.mensual
                 hora: velas.hora
             },
 
