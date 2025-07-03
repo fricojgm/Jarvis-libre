@@ -2,9 +2,7 @@ const express = require('express');
 const axios = require('axios');
 let horaNY = null;
 const ZONA_NY = 'America/New_York';
-const INTERVALO_HORA = 30 * 60 * 1000; // 30 minutos
-
-// Consulta la hora oficial de NY cada 30 minutos
+const INTERVALO_HORA = process.env.INTERVALO_TIEMPO_NY ? parseInt(process.env.INTERVALO_TIEMPO_NY) : 30 * 60 * 1000;// Consulta la hora oficial de NY cada 12 horas
 async function sincronizarHoraNY() {
     try {
         const res = await axios.get(`https://worldtimeapi.org/api/timezone/${ZONA_NY}`);
