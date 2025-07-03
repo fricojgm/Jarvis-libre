@@ -89,7 +89,7 @@ async function obtenerFundamentales(symbol, precioRealVivo) {
 
 async function obtenerShortData(symbol) {
     try {
-        const urlInterest = `https://api.polygon.io/v1/reference/short-interest?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`;
+        const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=10&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
         const resInterest = await axios.get(urlInterest);
         const datos = resInterest.data?.results?.[0] || null;
 
