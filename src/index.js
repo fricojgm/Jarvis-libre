@@ -3,11 +3,12 @@ const axios = require('axios');
 let horaNY = null;
 const ZONA_NY = 'America/New_York';
 const INTERVALO_HORA = process.env.INTERVALO_TIEMPO_NY ? parseInt(process.env.INTERVALO_TIEMPO_NY) : 30 * 60 * 1000;// Consulta la hora oficial de NY cada 12 horas
+
 async function sincronizarHoraNY() {
     try {
         const res = await axios.get(`https://worldtimeapi.org/api/timezone/${ZONA_NY}`);
         horaNY = new Date(res.data.datetime);
-        console.log(`🕒 Hora NY actualizada: ${horaNY.toISOString()}`);
+        console.log(`🕒 Hora NY correctamente: ${horaNY.toLocaleString("en-US", { timeZone: ZONA_NY }}}`);
     } catch (err) {
         console.log(`[WARN] No se pudo actualizar hora NY, usando fallback local`);
     }
