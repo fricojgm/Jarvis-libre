@@ -401,6 +401,11 @@ if (horaNY < apertura) {
         const shortVolume = await obtenerShortVolume(symbol);
         const velas = await obtenerVelas(symbol);
 
+if (precioRealVivo === "N/A") {
+   return res.status(500).json({ error: "❌ Precio actual inválido o no disponible. No se permite fallback a histórico." });
+}
+
+
         res.json({
             symbol, timeframe,
             precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
