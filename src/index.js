@@ -339,7 +339,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const resumenAyer = await obtenerResumenDiario(symbol, fechaAyer);
     const shortData = await obtenerShortData(symbol);
     const fundamentales = await obtenerFundamentales(symbol);
-
+    
     try {
         const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
         const resPrecio = await axios.get(url);
@@ -356,7 +356,9 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         })).reverse();
 
         if (ohlcCompleto.length > 0 && esVelaAbierta(ohlcCompleto.at(-1), timeframe)) ohlcCompleto.pop();
-
+    const precioActualUrl = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
+    const resPrecioActual = await axios.get(precioActualUrl);
+    const precioActual = resPrecioActual.data.results.p;
         const precios = ohlcCompleto.map(c => c.cierre);
         const ohlc = ohlcCompleto.slice(-2);
 
