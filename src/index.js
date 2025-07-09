@@ -407,7 +407,7 @@ if (horaNY < apertura) {
 
             
             
-            ,
+            
             shortInterest: shortData.shortInterestTotal,
             avgDailyVolume: shortData.avgDailyVolume,
             daysToCover: shortData.daysToCover,
