@@ -50,86 +50,96 @@ app.get('/debug-hora', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
-async function obtenerPrecioTiempoReal(symbol) {
-    try {
-        const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
-        const res = await axios.get(url);
-        if (res.data?.results?.p) return res.data.results.p;
-        throw new Error('Precio tiempo real no disponible');
-    } catch (err) {
-        console.error(`Error obteniendo precio en tiempo real ${symbol}:`, err.message);
-        return "N/A";
+const axios = require('axios');
+
+// FUNCION PRINCIPAL DE CONEXIÓN CON EL PUENTE
+async function obtenerDatosDesdePuente(ticker) {
+  try {
+    const url = `https://jarvis-libre.onrender.com/reporte-mercado/${ticker}`;
+    const response = await axios.get(url);
+    const data = response.data;
+
+    if (!data || !data.precioActual) {
+      throw new Error(`Precio no disponible desde el puente para ${ticker}`);
     }
+
+    return data;
+  } catch (error) {
+    console.error(`Error desde el puente para ${ticker}:`, error.message);
+    throw error;
+  }
 }
 
-async function obtenerFundamentales(symbol, precioRealVivo) {
-    try {
-        const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`;
-        const res = await axios.get(url);
-        const d = res.data.results?.[0] || {};
+async function obtenerPrecioTiempoReal(symbol) {
+  try {
+    const data = await obtenerDatosDesdePuente(symbol);
+    return data.precioActual;
+  } catch (error) {
+    console.error(`Error al obtener el precio desde el puente para ${symbol}:`, error.message);
+    throw error;
+  }
+}
 
-        const dilutedShares = d.financials?.income_statement?.diluted_average_shares?.value;
-        const eps = d.financials?.income_statement?.basic_earnings_per_share?.value;
+async function obtenerFundamentales(symbol) {
+  try {
+    const data = await obtenerDatosDesdePuente(symbol);
 
-        return {
-            marketCap: (dilutedShares && precioRealVivo) ? (dilutedShares * precioRealVivo) : "N/A",
-            eps: eps || "N/A",
-            peRatio: (eps && precioRealVivo) ? (precioRealVivo / eps) : "N/A"
-        };
+    const marketCap = data.fundamental?.marketCap ?? "N/A";
+    const eps = data.fundamental?.eps ?? "N/A";
+    const peRatio = data.fundamental?.peRatio ?? "N/A";
 
-    } catch (err) {
-        console.error(`Error Fundamentales ${symbol}:`, err.message);
-        return {
-            marketCap: "N/A",
-            eps: "N/A",
-            peRatio: "N/A"
-        };
-    }
+    return {
+      marketCap,
+      eps,
+      peRatio
+    };
+  } catch (err) {
+    console.error(`Error Fundamentos ${symbol}:`, err.message);
+    return {
+      marketCap: "N/A",
+      eps: "N/A",
+      peRatio: "N/A"
+    };
+  }
 }
 
 async function obtenerShortData(symbol) {
-    try {
-        const urlInterest = `https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=10&sort=ticker.asc&apiKey=${POLYGON_API_KEY}`;
-        const resInterest = await axios.get(urlInterest);
-        const datos = resInterest.data?.results?.[0] || null;
+  try {
+    const data = await obtenerDatosDesdePuente(symbol);
 
-        return {
-            shortInterestTotal: datos?.short_interest ?? "N/A",
-            avgDailyVolume: datos?.avg_daily_volume ?? "N/A",
-            daysToCover: datos?.days_to_cover ?? "N/A"
-        };
-
-    } catch (err) {
-        console.error(`Error Short Data ${symbol}:`, err.message);
-        return {
-            shortInterestTotal: "N/A",
-            avgDailyVolume: "N/A",
-            daysToCover: "N/A"
-        };
-    }
+    return {
+      shortInterestTotal: data.shortInterestTotal ?? "N/A",
+      avgDailyVolume: data.avgDailyVolume ?? "N/A",
+      daysToCover: data.daysToCover ?? "N/A"
+    };
+  } catch (err) {
+    console.error(`Error Short Data ${symbol}:`, err.message);
+    return {
+      shortInterestTotal: "N/A",
+      avgDailyVolume: "N/A",
+      daysToCover: "N/A"
+    };
+  }
 }
 
 // Short Volume Diario
 async function obtenerShortVolume(symbol) {
-    try {
-        const urlVolume = `https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&limit=10&sort=ticker.desc&apiKey=${POLYGON_API_KEY}`;
-        const resVolume = await axios.get(urlVolume);
-        const ultimo = resVolume.data?.results?.[0] || null;
+  try {
+    const data = await obtenerDatosDesdePuente(symbol);
 
-        return {
-            shortVolume: ultimo?.short_volume ?? "N/A",
-            shortVolumeRatio: ultimo?.short_volume_ratio ?? "N/A",
-            totalVolume: ultimo?.total_volume ?? "N/A"
-        };
-
-    } catch (err) {
-        console.error(`Error Short Volume ${symbol}:`, err.message);
-        return {
-            shortVolume: "N/A",
-            shortVolumeRatio: "N/A",
-            totalVolume: "N/A"
-        };
-    }
+    return {
+      shortVolume: data.shortVolume ?? "N/A",
+      shortVolumeRatio: data.shortVolumeRatio ?? "N/A",
+      totalVolume: data.totalVolume ?? "N/A"
+    };
+  } catch (err) {
+    console.error(`Error Short Volume ${symbol}:`, err.message);
+    return {
+      shortVolume: "N/A",
+      shortVolumeRatio: "N/A",
+      totalVolume: "N/A"
+    };
+  }
 }
 
 function calcularRSI(precios) {
@@ -161,35 +171,24 @@ function detectarPatronVelas(ohlc) {
 }
 
 async function obtenerVelas(symbol) {
-    try {
-        const urlDiario = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/2024-01-01/2024-12-31?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`;
-        const urlSemanal = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/week/2024-01-01/2024-12-31?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`;
-        const urlMensual = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/month/2024-01-01/2024-12-31?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`;
-        const urlHora = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/hour/2024-07-01/2024-07-03?adjusted=true&sort=asc&apiKey=${POLYGON_API_KEY}`;
+  try {
+    const data = await obtenerDatosDesdePuente(symbol);
 
-        const [resDiario, resSemanal, resMensual, resHora] = await Promise.all([
-            axios.get(urlDiario),
-            axios.get(urlSemanal),
-            axios.get(urlMensual),
-            axios.get(urlHora)
-        ]);
-
-        return {
-            diario: resDiario.data.results || [],
-            semanal: resSemanal.data.results || [],
-            mensual: resMensual.data.results || [],
-            hora: resHora.data.results || []
-        };
-
-    } catch (err) {
-        console.error(`Error obteniendo velas ${symbol}:`, err.message);
-        return {
-            diario: [],
-            semanal: [],
-            mensual: [],
-            hora: []
-        };
-    }
+    return {
+      diario: data.velas?.diario ?? [],
+      semanal: data.velas?.semanal ?? [],
+      mensual: data.velas?.mensual ?? [],
+      hora: data.velas?.hora ?? []
+    };
+  } catch (err) {
+    console.error(`Error obteniendo velas ${symbol}:`, err.message);
+    return {
+      diario: [],
+      semanal: [],
+      mensual: [],
+      hora: []
+    };
+  }
 }
 
 function calcularATR(ohlc) {
@@ -279,52 +278,41 @@ function getWeekNumber(d) {
     return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
-async function obtenerResumenDiario(symbol, fecha) {
-    try {
-        const url = `https://api.polygon.io/v1/open-close/${symbol}/${fecha}?adjusted=true&apiKey=${POLYGON_API_KEY}`;
-        const res = await axios.get(url);
-        const d = res.data;
+async function obtenerResumenDiario(symbol) {
+  try {
+    const data = await obtenerDatosDesdePuente(symbol);
 
-        return {
-            apertura: d.open ?? "N/A",
-            maximo: d.high ?? "N/A",
-            minimo: d.low ?? "N/A",
-            cierre: d.close ?? "N/A",
-            volumen: d.volume ?? "N/A",
-            afterHours: d.afterHours ?? "N/A",
-            preMarket: d.preMarket ?? "N/A"
-        };
-
-    } catch (err) {
-        console.error(`Error Resumen Diario ${symbol}:`, err.message);
-        return {
-            apertura: "N/A",
-            maximo: "N/A",
-            minimo: "N/A",
-            cierre: "N/A",
-            volumen: "N/A",
-            afterHours: "N/A",
-            preMarket: "N/A"
-        };
-    }
+    return {
+      apertura: data.ohlcCompleto?.[0]?.apertura ?? "N/A",
+      maximo: data.ohlcCompleto?.[0]?.maximo ?? "N/A",
+      minimo: data.ohlcCompleto?.[0]?.minimo ?? "N/A",
+      cierre: data.ohlcCompleto?.[0]?.cierre ?? "N/A",
+      volumen: data.volumen ?? "N/A",
+      afterHours: data.afterHours ?? "N/A", // si el puente lo provee
+      preMarket: data.preMarket ?? "N/A"     // si el puente lo provee
+    };
+  } catch (err) {
+    console.error(`Error en resumen diario ${symbol}:`, err.message);
+    return {
+      apertura: "N/A",
+      maximo: "N/A",
+      minimo: "N/A",
+      cierre: "N/A",
+      volumen: "N/A",
+      afterHours: "N/A",
+      preMarket: "N/A"
+    };
+  }
 }
 
 async function obtenerNoticiasConInsights(symbol) {
-    try {
-        const url = `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${POLYGON_API_KEY}`;
-        const res = await axios.get(url);
-        if (!res.data?.results) return [];
-        return res.data.results.map(n => ({
-            titulo: n.title,
-            sentimiento: n.insights?.find(i => i.ticker === symbol)?.sentiment || "neutral",
-            resumen: n.description,
-            url: n.article_url,
-            fuente: n.publisher?.name,
-            fecha: n.published_utc
-        }));
-    } catch {
-        return [];
-    }
+  try {
+    const data = await obtenerDatosDesdePuente(symbol);
+    return data.noticias || [];
+  } catch (err) {
+    console.error(`Error obteniendo noticias para ${symbol}:`, err.message);
+    return [];
+  }
 }
 
 app.get('/reporte-mercado/:symbol', async (req, res) => {
@@ -335,10 +323,25 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const ayer = new Date();
     ayer.setDate(ayer.getDate() - 1);
     const fechaAyer = ayer.toISOString().split('T')[0];
-    const resumenDiario = await obtenerResumenDiario(symbol, hoy);
-    const resumenAyer = await obtenerResumenDiario(symbol, fechaAyer);
-    const shortData = await obtenerShortData(symbol);
-    const fundamentales = await obtenerFundamentales(symbol);
+    const [
+      resumenDiario,
+      resumenAyer,
+      shortData,
+      shortVolume,
+      precioRealVivo,
+      velas,
+      noticias
+] = await Promise.all([
+  obtenerResumenDiario(symbol, hoy),
+  obtenerResumenDiario(symbol, fechaAyer),
+  obtenerShortData(symbol),
+  obtenerShortVolume(symbol),
+  obtenerPrecioTiempoReal(symbol),
+  obtenerVelas(symbol),
+  obtenerNoticiasConInsights(symbol)
+]);
+
+const fundamentales = await obtenerFundamentales(symbol, precioRealVivo);
 
     try {
         const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
@@ -395,71 +398,109 @@ if (horaNY < apertura) {
 }
         const precioRealVivo = await obtenerPrecioTiempoReal(symbol);
         const fundamentales = await obtenerFundamentales(symbol, precioRealVivo);
-        const shortData = await obtenerShortData(symbol);
+const fundamentalesCampos = ['marketCap', 'eps', 'peRatio'];
+for (const campo of fundamentalesCampos) {
+  if (fundamentales[campo] === null || fundamentales[campo] === undefined || isNaN(fundamentales[campo])) {
+    return res.status(502).json({ error: `El campo fundamentales.${campo} es inválido.` });
+  }
+}
+
+        const shortData = await obtenerShortData(symbol);if (!shortData || Object.keys(shortData).length === 0) {
+  return res.status(502).json({ error: "No se pudieron obtener los datos de short interest." });
+}
         const shortVolume = await obtenerShortVolume(symbol);
+if (!shortVolume || Object.keys(shortVolume).length === 0) {
+  return res.status(502).json({ error: "No se pudieron obtener los datos de short volume." });
+}
+
+const shortInterestCampos = ['shortInterestTotal', 'avgDailyVolume', 'daysToCover'];
+for (const campo of shortInterestCampos) {
+  if (!shortData[campo] || isNaN(shortData[campo])) {
+    return res.status(502).json({ error: `El campo shortInterest.${campo} es inválido.` });
+  }
+}
+
+const shortVolumeCampos = ['shortVolume', 'shortVolumeRatio', 'totalVolume'];
+for (const campo of shortVolumeCampos) {
+  if (!shortVolume[campo] || isNaN(shortVolume[campo])) {
+    return res.status(502).json({ error: `El campo shortVolume.${campo} es inválido.` });
+  }
+}
+
         const velas = await obtenerVelas(symbol);
+if (!velas || Object.keys(velas).length === 0) {
+  return res.status(502).json({ error: "No se pudieron obtener los datos de velas del activo." });
+}
 
+const camposVelas = ['diario', 'semanal', 'mensual', 'hora'];
+
+for (const campo of camposVelas) {
+  if (!Array.isArray(velas[campo]) || velas[campo].length === 0) {
+    return res.status(502).json({ error: `El campo de velas.${campo} está vacío o no es un arreglo.` });
+  }
+}
+
+if (!precioRealVivo || isNaN(precioRealVivo)) {
+  return res.status(502).json({ error: "Precio en tiempo real no disponible o inválido." });
+}
+
+if (!Array.isArray(velas.diario) || velas.diario.length === 0) {
+  return res.status(502).json({ error: "No se pudieron obtener las velas históricas del activo." });
+}
+
+if (!ohlcCompleto || ohlcCompleto.length === 0) {
+  return res.status(502).json({ error: "No hay datos OHLC disponibles para análisis técnico." });
+}
         res.json({
-            symbol, timeframe,
-            precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
-            historico: precios.slice(-cantidad),
-            rsi, macd, patron, atr, adx, vwap,
-            bollingerBands: bb,
-            velas: {
-                diario: velas.diario,
-                semanal: velas.semanal,
-                mensual: velas.mensual,
-                hora: velas.hora
-            },
-
-           fundamentales: {
-               marketCap: fundamentales.marketCap,
-               eps: fundamentales.eps,
-               peRatio: fundamentales.peRatio
-           },
-
-           shortInterest: {
-               shortInterestTotal: shortData.shortInterestTotal,
-               avgDailyVolume: shortData.avgDailyVolume,
-               daysToCover: shortData.daysToCover
-           },
-
-           shortVolume: {
-               shortVolume: shortVolume.shortVolume,
-               shortVolumeRatio: shortVolume.shortVolumeRatio,
-               totalVolume: shortVolume.totalVolume
-            },
-
-            volumen: {
-                volumenActual: ohlcCompleto.at(-1)?.volumen || "N/A",
-                volumenPromedio30Dias: (ohlcCompleto.slice(-30).map(c => c.volumen).reduce((a, b) => a + b, 0) / Math.min(ohlcCompleto.length, 30)).toFixed(2),
-                volumenAcumulado: volumenAcum
-            },
-
-            afterHours: resumenDiario.afterHours,
-            preMarket: resumenDiario.preMarket,
-            aperturaDiaAnterior: resumenAyer.apertura,
-            minimoDiaAnterior: resumenAyer.minimo,
-            maximoDiaAnterior: resumenAyer.maximo,
-            cierreDiaAnterior: resumenAyer.cierre,
-            volumenResumenDiario: resumenDiario.volumen,
-            shortInterest: shortData.shortInterestTotal,
-            avgDailyVolume: shortData.avgDailyVolume,
-            daysToCover: shortData.daysToCover,
-            moneyFlowIndex: mfi,
-            tecnicoCombinado: tecnicoCombo,
-            noticias,
-	    horaNY: horaNY.toISOString(),
-            horaLocal: horaLocal.toISOString(),
-            mercado: {
-             estado,
-             tiempoParaEvento
-           }
-        });
-
-    } catch (err) {
-        console.error(`Error ${symbol}: ${err.message}`);
-        res.status(500).json({ error: "Datos no disponibles" });
+    symbol, timeframe,
+    precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
+    historico: precios.slice(-cantidad),
+    rsi, macd, patron, atr, adx, vwap,
+    bollingerBands: bb,
+    velas: {
+        diario: velas.diario,
+        semanal: velas.semanal,
+        mensual: velas.mensual,
+        hora: velas.hora
+    },
+    fundamentales: {
+        marketCap: fundamentales.marketCap,
+        eps: fundamentales.eps,
+        peRatio: fundamentales.peRatio
+    },
+    shortInterest: {
+        shortInterestTotal: shortData.shortInterestTotal,
+        avgDailyVolume: shortData.avgDailyVolume,
+        daysToCover: shortData.daysToCover
+    },
+    shortVolume: {
+        shortVolume: shortVolume.shortVolume,
+        shortVolumeRatio: shortVolume.shortVolumeRatio,
+        totalVolume: shortVolume.totalVolume
+    },
+    volumen: {
+        volumenActual: ohlcCompleto.at(-1)?.volumen || "N/A",
+        volumenPromedio30Dias: (
+            ohlcCompleto.slice(-30).map(c => c.volumen).reduce((a, b) => a + b, 0) /
+            Math.min(ohlcCompleto.length, 30)
+        ).toFixed(2),
+        volumenAcumulado: volumenAcum
+    },
+    afterHours: resumenDiario.afterHours,
+    preMarket: resumenDiario.preMarket,
+    aperturaDiaAnterior: resumenAyer.apertura,
+    minimoDiaAnterior: resumenAyer.minimo,
+    maximoDiaAnterior: resumenAyer.maximo,
+    cierreDiaAnterior: resumenAyer.cierre,
+    volumenResumenDiario: resumenDiario.volumen,
+    moneyFlowIndex: mfi,
+    tecnicoCombinado: tecnicoCombo,
+    noticias,
+    horaNY: horaNY.toISOString(),
+    horaLocal: horaLocal.toISOString(),
+    mercado: {
+        estado,
+        tiempoParaEvento
     }
 });
 
