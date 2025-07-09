@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 app.get('/reporte-mercado/:ticker', async (req, res) => {
-  const { ticker } = req.params.ticker.toUpperCase();
+  const  ticker  = req.params.ticker.toUpperCase();
   const symbol = ticker?.toUpperCase(); // ⚠️ Usa el operador opcional "?" por si viene undefined
   if (!symbol) {
     return res.status(400).json({ error: true, mensaje: 'Ticker no válido o no provisto' });
