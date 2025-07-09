@@ -25,7 +25,7 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
     technicalATR: `https://api.polygon.io/v1/indicators/atr/${symbol}?timespan=day&window=14&order=desc&apiKey=${apiKey}`,
     technicalADX: `https://api.polygon.io/v1/indicators/adx/${symbol}?timespan=day&window=14&order=desc&apiKey=${apiKey}`,
     technicalMFI: `https://api.polygon.io/v1/indicators/mfi/${symbol}?timespan=day&window=14&order=desc&apiKey=${apiKey}`,
-    technicalVWAP: `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${apiKey}``
+    technicalVWAP: `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${apiKey}`
   };
 
   const safeGet = async (url) => {
