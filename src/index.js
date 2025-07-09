@@ -315,13 +315,15 @@ async function obtenerNoticiasConInsights(symbol) {
 }
 
 app.get('/reporte-mercado/:symbol', async (req, res) => {
-    const symbol = req.params.symbol.toUpperCase();
-    const timeframe = req.query.timeframe || 'day';
-    const cantidad = parseInt(req.query.cantidad) || 5000;
-    const hoy = new Date().toISOString().split('T')[0];
-    const ayer = new Date();
-    ayer.setDate(ayer.getDate() - 1);
-    const fechaAyer = ayer.toISOString().split('T')[0];
+  const symbol = req.params.symbol.toUpperCase();
+  const timeframe = req.query.timeframe || 'day';
+  const cantidad = parseInt(req.query.cantidad) || 5000;
+  const hoy = new Date().toISOString().split('T')[0];
+  const ayer = new Date();
+  ayer.setDate(ayer.getDate() - 1);
+  const fechaAyer = ayer.toISOString().split('T')[0];
+
+  try {
     const [
       resumenDiario,
       resumenAyer,
@@ -330,180 +332,105 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       precioRealVivo,
       velas,
       noticias
-] = await Promise.all([
-  obtenerResumenDiario(symbol, hoy),
-  obtenerResumenDiario(symbol, fechaAyer),
-  obtenerShortData(symbol),
-  obtenerShortVolume(symbol),
-  obtenerPrecioTiempoReal(symbol),
-  obtenerVelas(symbol),
-  obtenerNoticiasConInsights(symbol)
-]);
+    ] = await Promise.all([
+      obtenerResumenDiario(symbol, hoy),
+      obtenerResumenDiario(symbol, fechaAyer),
+      obtenerShortData(symbol),
+      obtenerShortVolume(symbol),
+      obtenerPrecioTiempoReal(symbol),
+      obtenerVelas(symbol),
+      obtenerNoticiasConInsights(symbol)
+    ]);
 
-const fundamentales = await obtenerFundamentales(symbol, precioRealVivo);
+    const fundamentales = await obtenerFundamentales(symbol);
 
-    try {
-        const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
-        const resPrecio = await axios.get(url);
-        let datos = resPrecio.data.results;
-        if (!datos || datos.length === 0) return res.status(404).json({ error: "Sin datos en ese timeframe" });
+    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
+    const resPrecio = await axios.get(url);
+    let datos = resPrecio.data.results;
+    if (!datos || datos.length === 0) return res.status(404).json({ error: "Sin datos en ese timeframe" });
 
-        let ohlcCompleto = datos.map(c => ({
-            fecha: new Date(c.t).toISOString().split('T')[0],
-            apertura: c.o,
-            maximo: c.h,
-            minimo: c.l,
-            cierre: c.c,
-            volumen: c.v
-        })).reverse();
+    let ohlcCompleto = datos.map(c => ({
+      fecha: new Date(c.t).toISOString().split('T')[0],
+      apertura: c.o,
+      maximo: c.h,
+      minimo: c.l,
+      cierre: c.c,
+      volumen: c.v
+    })).reverse();
 
-        if (ohlcCompleto.length > 0 && esVelaAbierta(ohlcCompleto.at(-1), timeframe)) ohlcCompleto.pop();
+    if (ohlcCompleto.length > 0 && esVelaAbierta(ohlcCompleto.at(-1), timeframe)) ohlcCompleto.pop();
 
-        const precios = ohlcCompleto.map(c => c.cierre);
-        const ohlc = ohlcCompleto.slice(-2);
+    const precios = ohlcCompleto.map(c => c.cierre);
+    const ohlc = ohlcCompleto.slice(-2);
 
-        let rsi = "N/A", macd = "N/A", patron = "N/A", atr = "N/A", adx = "N/A", vwap = "N/A", bb = { superior: "N/A", inferior: "N/A" }, volumenAcum = "N/A", mfi = "N/A", tecnicoCombo = "N/A";
+    let rsi = "N/A", macd = "N/A", patron = "N/A", atr = "N/A", adx = "N/A", vwap = "N/A", bb = { superior: "N/A", inferior: "N/A" }, volumenAcum = "N/A", mfi = "N/A", tecnicoCombo = "N/A";
 
-        if (precios.length >= 14) rsi = calcularRSI(precios);
-        if (precios.length >= 26) macd = calcularMACD(precios);
-        if (ohlc.length >= 2) patron = detectarPatronVelas(ohlc);
-        if (ohlcCompleto.length >= 14) atr = calcularATR(ohlcCompleto);
-        if (ohlcCompleto.length >= 14) adx = calcularADX(ohlcCompleto);
-        if (ohlcCompleto.length >= 20) bb = calcularBollingerBands(precios);
-        if (ohlcCompleto.length >= 1) vwap = calcularVWAP(ohlcCompleto);
-        if (ohlcCompleto.length >= 1) volumenAcum = calcularVolumenAcumulado(ohlcCompleto);
-        if (ohlcCompleto.length >= 15) mfi = calcularMoneyFlowIndex(ohlcCompleto);
-        if (rsi !== "N/A" && macd !== "N/A" && patron !== "N/A" && mfi !== "N/A") tecnicoCombo = analisisCombinado(rsi, macd, patron, mfi);
+    if (precios.length >= 14) rsi = calcularRSI(precios);
+    if (precios.length >= 26) macd = calcularMACD(precios);
+    if (ohlc.length >= 2) patron = detectarPatronVelas(ohlc);
+    if (ohlcCompleto.length >= 14) atr = calcularATR(ohlcCompleto);
+    if (ohlcCompleto.length >= 14) adx = calcularADX(ohlcCompleto);
+    if (ohlcCompleto.length >= 20) bb = calcularBollingerBands(precios);
+    if (ohlcCompleto.length >= 1) vwap = calcularVWAP(ohlcCompleto);
+    if (ohlcCompleto.length >= 1) volumenAcum = calcularVolumenAcumulado(ohlcCompleto);
+    if (ohlcCompleto.length >= 15) mfi = calcularMoneyFlowIndex(ohlcCompleto);
+    if (rsi !== "N/A" && macd !== "N/A" && patron !== "N/A" && mfi !== "N/A") tecnicoCombo = analisisCombinado(rsi, macd, patron, mfi);
 
-        const noticias = await obtenerNoticiasConInsights(symbol);
+    const horaNY = obtenerHoraBlindadaNY();
+    const horaLocal = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Santo_Domingo" }));
+    const apertura = new Date(horaNY); apertura.setHours(9, 30, 0, 0);
+    const cierre = new Date(horaNY); cierre.setHours(16, 0, 0, 0);
 
-// Hora y estado de mercado
-const horaNY = obtenerHoraBlindadaNY();
-const horaLocal = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Santo_Domingo" }));
-const apertura = new Date(horaNY); apertura.setHours(9, 30, 0, 0);
-const cierre = new Date(horaNY); cierre.setHours(16, 0, 0, 0);
+    let estado = "Cerrado", tiempoParaEvento = "N/A";
+    if (horaNY < apertura) {
+      estado = "Pre-market";
+      tiempoParaEvento = `${Math.floor((apertura - horaNY) / (1000 * 60))} min para apertura`;
+    } else if (horaNY >= apertura && horaNY <= cierre) {
+      estado = "Abierto";
+      tiempoParaEvento = `${Math.floor((cierre - horaNY) / (1000 * 60))} min para cierre`;
+    } else {
+      estado = "Post-market";
+      const siguienteApertura = new Date(apertura); siguienteApertura.setDate(siguienteApertura.getDate() + 1);
+      tiempoParaEvento = `${Math.floor((siguienteApertura - horaNY) / (1000 * 60))} min para apertura siguiente`;
+    }
 
-let estado = "Cerrado", tiempoParaEvento = "N/A";
-if (horaNY < apertura) {
-    estado = "Pre-market";
-    tiempoParaEvento = `${Math.floor((apertura - horaNY) / (1000 * 60))} min para apertura`;
-} else if (horaNY >= apertura && horaNY <= cierre) {
-    estado = "Abierto";
-    tiempoParaEvento = `${Math.floor((cierre - horaNY) / (1000 * 60))} min para cierre`;
-} else {
-    estado = "Post-market";
-    const siguienteApertura = new Date(apertura); siguienteApertura.setDate(siguienteApertura.getDate() + 1);
-    tiempoParaEvento = `${Math.floor((siguienteApertura - horaNY) / (1000 * 60))} min para apertura siguiente`;
-}
-        const precioRealVivo = await obtenerPrecioTiempoReal(symbol);
-        const fundamentales = await obtenerFundamentales(symbol, precioRealVivo);
-const fundamentalesCampos = ['marketCap', 'eps', 'peRatio'];
-for (const campo of fundamentalesCampos) {
-  if (fundamentales[campo] === null || fundamentales[campo] === undefined || isNaN(fundamentales[campo])) {
-    return res.status(502).json({ error: `El campo fundamentales.${campo} es inválido.` });
-  }
-}
-
-        const shortData = await obtenerShortData(symbol);if (!shortData || Object.keys(shortData).length === 0) {
-  return res.status(502).json({ error: "No se pudieron obtener los datos de short interest." });
-}
-        const shortVolume = await obtenerShortVolume(symbol);
-if (!shortVolume || Object.keys(shortVolume).length === 0) {
-  return res.status(502).json({ error: "No se pudieron obtener los datos de short volume." });
-}
-
-const shortInterestCampos = ['shortInterestTotal', 'avgDailyVolume', 'daysToCover'];
-for (const campo of shortInterestCampos) {
-  if (!shortData[campo] || isNaN(shortData[campo])) {
-    return res.status(502).json({ error: `El campo shortInterest.${campo} es inválido.` });
-  }
-}
-
-const shortVolumeCampos = ['shortVolume', 'shortVolumeRatio', 'totalVolume'];
-for (const campo of shortVolumeCampos) {
-  if (!shortVolume[campo] || isNaN(shortVolume[campo])) {
-    return res.status(502).json({ error: `El campo shortVolume.${campo} es inválido.` });
-  }
-}
-
-        const velas = await obtenerVelas(symbol);
-if (!velas || Object.keys(velas).length === 0) {
-  return res.status(502).json({ error: "No se pudieron obtener los datos de velas del activo." });
-}
-
-const camposVelas = ['diario', 'semanal', 'mensual', 'hora'];
-
-for (const campo of camposVelas) {
-  if (!Array.isArray(velas[campo]) || velas[campo].length === 0) {
-    return res.status(502).json({ error: `El campo de velas.${campo} está vacío o no es un arreglo.` });
-  }
-}
-
-if (!precioRealVivo || isNaN(precioRealVivo)) {
-  return res.status(502).json({ error: "Precio en tiempo real no disponible o inválido." });
-}
-
-if (!Array.isArray(velas.diario) || velas.diario.length === 0) {
-  return res.status(502).json({ error: "No se pudieron obtener las velas históricas del activo." });
-}
-
-if (!ohlcCompleto || ohlcCompleto.length === 0) {
-  return res.status(502).json({ error: "No hay datos OHLC disponibles para análisis técnico." });
-}
-       res.json({
-    symbol, timeframe,
-    precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
-    historico: precios.slice(-cantidad),
-    rsi, macd, patron, atr, adx, vwap,
-    bollingerBands: bb,
-    velas: {
-        diario: velas.diario,
-        semanal: velas.semanal,
-        mensual: velas.mensual,
-        hora: velas.hora
-    },
-    fundamentales: {
-        marketCap: fundamentales.marketCap,
-        eps: fundamentales.eps,
-        peRatio: fundamentales.peRatio
-    },
-    shortInterest: {
-        shortInterestTotal: shortData.shortInterestTotal,
-        avgDailyVolume: shortData.avgDailyVolume,
-        daysToCover: shortData.daysToCover
-    },
-    shortVolume: {
-        shortVolume: shortVolume.shortVolume,
-        shortVolumeRatio: shortVolume.shortVolumeRatio,
-        totalVolume: shortVolume.totalVolume
-    },
-    volumen: {
+    res.json({
+      symbol, timeframe,
+      precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
+      historico: precios.slice(-cantidad),
+      rsi, macd, patron, atr, adx, vwap,
+      bollingerBands: bb,
+      velas,
+      fundamentales,
+      shortInterest: shortData,
+      shortVolume,
+      volumen: {
         volumenActual: ohlcCompleto.at(-1)?.volumen || "N/A",
         volumenPromedio30Dias: (
-            ohlcCompleto.slice(-30).map(c => c.volumen).reduce((a, b) => a + b, 0) /
-            Math.min(ohlcCompleto.length, 30)
+          ohlcCompleto.slice(-30).map(c => c.volumen).reduce((a, b) => a + b, 0) /
+          Math.min(ohlcCompleto.length, 30)
         ).toFixed(2),
         volumenAcumulado: volumenAcum
-    },
-    afterHours: resumenDiario.afterHours,
-    preMarket: resumenDiario.preMarket,
-    aperturaDiaAnterior: resumenAyer.apertura,
-    minimoDiaAnterior: resumenAyer.minimo,
-    maximoDiaAnterior: resumenAyer.maximo,
-    cierreDiaAnterior: resumenAyer.cierre,
-    volumenResumenDiario: resumenDiario.volumen,
-    moneyFlowIndex: mfi,
-    tecnicoCombinado: tecnicoCombo,
-    noticias,
-    horaNY: horaNY.toISOString(),
-    horaLocal: horaLocal.toISOString(),
-    mercado: {
+      },
+      afterHours: resumenDiario.afterHours,
+      preMarket: resumenDiario.preMarket,
+      aperturaDiaAnterior: resumenAyer.apertura,
+      minimoDiaAnterior: resumenAyer.minimo,
+      maximoDiaAnterior: resumenAyer.maximo,
+      cierreDiaAnterior: resumenAyer.cierre,
+      volumenResumenDiario: resumenDiario.volumen,
+      moneyFlowIndex: mfi,
+      tecnicoCombinado: tecnicoCombo,
+      noticias,
+      horaNY: horaNY.toISOString(),
+      horaLocal: horaLocal.toISOString(),
+      mercado: {
         estado,
         tiempoParaEvento
-    }
-  });
+      }
+    });
 
-} catch (err) {
+  } catch (err) {
     console.error(`Error ${symbol}: ${err.message}`);
     return res.status(500).json({ error: "Datos no disponibles" });
   }
