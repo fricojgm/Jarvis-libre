@@ -1,4 +1,3 @@
-const express = require('express');
 const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,7 +32,7 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
       const res = await axios.get(url);
       return res.data;
     } catch (e) {
-      console.warn(`⚠️ Error al llamar: ${url} => ${e.response?.status || e.message}`);
+      console.warn(⚠️ Error al llamar: ${url} => ${e.response?.status || e.message}`);
       return null;
     }
   };
