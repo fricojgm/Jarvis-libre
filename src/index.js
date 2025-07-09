@@ -6,22 +6,45 @@ const PORT = process.env.PORT || 3000;
 // Clave API de Polygon
 const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
+// Función para restar días a una fecha
+const restarDias = (fecha, dias) => {
+  const nueva = new Date(fecha);
+  nueva.setDate(nueva.getDate() - dias);
+  return nueva.toISOString().split('T')[0];
+};
+
 app.get('/reporte-mercado/:ticker', async (req, res) => {
   const { ticker } = req.params;
 
-  // Fecha actual en formato YYYY-MM-DD
   const hoy = new Date().toISOString().split('T')[0];
+  let fechaConsulta = hoy;
 
-  const endpoints = {
-    openClose: `https://api.polygon.io/v1/open-close/${ticker}/${hoy}?apiKey=${apiKey}`,
+  const buildEndpoints = (fecha) => ({
+    openClose: `https://api.polygon.io/v1/open-close/${ticker}/${fecha}?apiKey=${apiKey}`,
     snapshot: `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}?apiKey=${apiKey}`,
     shortInterest: `https://api.polygon.io/v3/reference/shorts?ticker=${ticker}&apiKey=${apiKey}`,
     news: `https://api.polygon.io/v2/reference/news?ticker=${ticker}&limit=5&apiKey=${apiKey}`
-  };
+  });
+
+  let endpoints = buildEndpoints(fechaConsulta);
 
   try {
-    const [ocRes, snapRes, shortRes, newsRes] = await Promise.all([
-      axios.get(endpoints.openClose),
+    let ocRes;
+
+    // Intentar hoy y si falla, retroceder un día hábil
+    try {
+      ocRes = await axios.get(endpoints.openClose);
+    } catch (err) {
+      if (err.response && err.response.status === 404) {
+        fechaConsulta = restarDias(hoy, 1);
+        endpoints = buildEndpoints(fechaConsulta);
+        ocRes = await axios.get(endpoints.openClose);
+      } else {
+        throw err;
+      }
+    }
+
+    const [snapRes, shortRes, newsRes] = await Promise.all([
       axios.get(endpoints.snapshot),
       axios.get(endpoints.shortInterest),
       axios.get(endpoints.news)
@@ -35,8 +58,7 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
     const reporte = {
       status: 'OK',
       symbol: ticker,
-      fecha: hoy,
-
+      fecha: fechaConsulta,
       precioActual: snap.lastTrade?.p || oc.close || null,
 
       dailySummary: {
@@ -81,7 +103,6 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
     };
 
     return res.json(reporte);
-
   } catch (error) {
     return res.status(500).json({
       error: true,
