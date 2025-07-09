@@ -34,12 +34,23 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
 
   // Obtener datos individualmente sin romper todo si uno falla
   try {
-  const [oc, snap, short, news] = await Promise.all([
+  const [oc, snap, short, newsRaw] = await Promise.all([
     safeGet(endpoints.openClose),
     safeGet(endpoints.snapshot),
     safeGet(endpoints.shortInterest),
     safeGet(endpoints.news)
   ]);
+
+    const news = Array.isArray(newsRaw?.results) ? newsRaw.results : [];
+
+    const noticias: news?.map(n => ({
+      titulo: n.title,
+      resumen: n.description,
+      url: n.article_url,
+      fuente: n.publisher?.name || null,
+      fecha: n.published_utc
+    })) || []
+  };
 
   const reporte = {
     status: 'OK',
@@ -74,14 +85,10 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
       eps: snap?.eps || null,
       dividendYield: snap?.dividend_yield || null
     },
-    noticias: news?.map(n => ({
-      titulo: n.title,
-      resumen: n.description,
-      url: n.article_url,
-      fuente: n.publisher?.name || null,
-      fecha: n.published_utc
-    })) || []
-  };
+    noticias: noticias
+    },
+
+    
 
   return res.json(reporte);
 } catch (error) {
