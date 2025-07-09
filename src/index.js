@@ -18,7 +18,7 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
     openClose: `https://api.polygon.io/v1/open-close/${symbol}/${hoy}?apiKey=${apiKey}`,
     snapshot: `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${apiKey}`,
     shortInterest: `https://api.polygon.io/v3/reference/shorts?ticker=${symbol}&apiKey=${apiKey}`,
-    news: `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${apiKey}
+    news: `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${apiKey}`,
     technicalRSI: `https://api.polygon.io/v1/indicators/rsi/${symbol}?timespan=day&window=14&series_type=close&order=desc&apiKey=${apiKey}`,
     technicalMACD: `https://api.polygon.io/v1/indicators/macd/${symbol}?timespan=day&long_window=26&short_window=12&signal_window=9       &series_type=close&order=desc&apiKey=${apiKey}`,
     technicalBollinger: `https://api.polygon.io/v1/indicators/bollinger_bands/${symbol}?timespan=day&window=20&series_type=close&order=desc&apiKey=${apiKey}`,
