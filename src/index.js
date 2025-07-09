@@ -405,13 +405,13 @@ if (horaNY < apertura) {
                 volumenAcumulado: volumenAcum
             },
 
-            afterHours: resumenDiario.afterHours,
-            preMarket: resumenDiario.preMarket,
+            afterHours: data?.resumenDiario.afterHours,
+            preMarket: data.?resumenDiario.preMarket,
             aperturaDiaAnterior: resumenAyer.apertura,
             minimoDiaAnterior: resumenAyer.minimo,
             maximoDiaAnterior: resumenAyer.maximo,
             cierreDiaAnterior: resumenAyer.cierre,
-            volumenResumenDiario: resumenDiario.volumen,
+            volumenResumenDiario: data?.resumenDiario.volumen,
             shortInterest: shortData.shortInterestTotal,
             avgDailyVolume: shortData.avgDailyVolume,
             daysToCover: shortData.daysToCover,
