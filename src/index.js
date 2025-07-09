@@ -43,7 +43,7 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
 
     const news = Array.isArray(newsRaw?.results) ? newsRaw.results : [];
 
-    const noticias: news?.map(n => ({
+    const noticias= news?.map(n => ({
       titulo: n.title,
       resumen: n.description,
       url: n.article_url,
