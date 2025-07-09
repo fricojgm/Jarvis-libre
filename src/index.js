@@ -8,6 +8,10 @@ const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 app.get('/reporte-mercado/:ticker', async (req, res) => {
   const { ticker } = req.params.ticker.toUpperCase();
+  const symbol = ticker?.toUpperCase(); // ⚠️ Usa el operador opcional "?" por si viene undefined
+  if (!symbol) {
+    return res.status(400).json({ error: true, mensaje: 'Ticker no válido o no provisto' });
+  }
   const hoy = new Date().toISOString().split('T')[0];
 
   const endpoints = {
@@ -29,23 +33,19 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
   };
 
   // Obtener datos individualmente sin romper todo si uno falla
-  const [oc, snap, shortRaw, newsRaw] = await Promise.all([
+  try {
+  const [oc, snap, short, news] = await Promise.all([
     safeGet(endpoints.openClose),
     safeGet(endpoints.snapshot),
     safeGet(endpoints.shortInterest),
     safeGet(endpoints.news)
   ]);
 
-  // Construir el reporte con lo que esté disponible
-  const short = shortRaw?.results?.[0] || {};
-  const snapData = snap?.ticker || {};
-  const news = newsRaw?.results || [];
-
   const reporte = {
     status: 'OK',
-    symbol: ticker,
+    symbol,
     fecha: hoy,
-    precioActual: snapData.lastTrade?.p || oc?.close || null,
+    precioActual: snap?.lastTrade?.p || oc?.close || null,
     dailySummary: {
       open: oc?.open || null,
       high: oc?.high || null,
@@ -56,11 +56,11 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
       volume: oc?.volume || null
     },
     previousDay: {
-      open: snapData?.day?.o || null,
-      high: snapData?.day?.h || null,
-      low: snapData?.day?.l || null,
-      close: snapData?.day?.c || null,
-      volume: snapData?.day?.v || null
+      open: snap?.day?.o || null,
+      high: snap?.day?.h || null,
+      low: snap?.day?.l || null,
+      close: snap?.day?.c || null,
+      volume: snap?.day?.v || null
     },
     shortInterest: {
       totalShort: short?.total_short_interest || null,
@@ -69,19 +69,28 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
       daysToCover: short?.days_to_cover || null
     },
     fundamentales: {
-      marketCap: snapData?.market_cap || null,
-      peRatio: snapData?.pe || null,
-      eps: snapData?.eps || null,
-      dividendYield: snapData?.dividend_yield || null
+      marketCap: snap?.market_cap || null,
+      peRatio: snap?.pe || null,
+      eps: snap?.eps || null,
+      dividendYield: snap?.dividend_yield || null
     },
-    noticias: news.map(n => ({
+    noticias: news?.map(n => ({
       titulo: n.title,
       resumen: n.description,
       url: n.article_url,
       fuente: n.publisher?.name || null,
       fecha: n.published_utc
-    }))
+    })) || []
   };
+
+  return res.json(reporte);
+} catch (error) {
+  return res.status(500).json({
+    error: true,
+    mensaje: 'Error interno al procesar el reporte',
+    detalle: error.message
+  });
+}
 
   return res.json(reporte);
 });
