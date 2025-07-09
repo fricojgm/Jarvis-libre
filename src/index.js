@@ -11,10 +11,10 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
   const hoy = new Date().toISOString().split('T')[0];
 
   const endpoints = {
-    openClose: `https://api.polygon.io/v1/open-close/${ticker}/${hoy}?apiKey=${apiKey}`,
-    snapshot: `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}?apiKey=${apiKey}`,
-    shortInterest: `https://api.polygon.io/v3/reference/shorts?ticker=${ticker}&apiKey=${apiKey}`,
-    news: `https://api.polygon.io/v2/reference/news?ticker=${ticker}&limit=5&apiKey=${apiKey}`
+    openClose: `https://api.polygon.io/v1/open-close/${symbol}/${hoy}?apiKey=${apiKey}`,
+    snapshot: `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${apiKey}`,
+    shortInterest: `https://api.polygon.io/v3/reference/shorts?ticker=${symbol}&apiKey=${apiKey}`,
+    news: `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${apiKey}`
   };
 
   // Función para hacer cada request con manejo de errores
