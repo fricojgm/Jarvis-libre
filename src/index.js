@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 app.get('/reporte-mercado/:ticker', async (req, res) => {
-  const { ticker } = req.params.toUpperCase();
+  const { ticker } = req.params.ticker.toUpperCase();
   const hoy = new Date().toISOString().split('T')[0];
 
   const endpoints = {
