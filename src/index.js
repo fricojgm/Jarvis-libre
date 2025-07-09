@@ -50,7 +50,6 @@ app.get('/debug-hora', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
-const axios = require('axios');
 
 // FUNCION PRINCIPAL DE CONEXIÓN CON EL PUENTE
 async function obtenerDatosDesdePuente(ticker) {
