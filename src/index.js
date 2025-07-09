@@ -6,110 +6,84 @@ const PORT = process.env.PORT || 3000;
 // Clave API de Polygon
 const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
-// Función para restar días a una fecha
-const restarDias = (fecha, dias) => {
-  const nueva = new Date(fecha);
-  nueva.setDate(nueva.getDate() - dias);
-  return nueva.toISOString().split('T')[0];
-};
-
 app.get('/reporte-mercado/:ticker', async (req, res) => {
-  const { ticker } = req.params;
-
+  const { ticker } = req.params.toUpperCase();
   const hoy = new Date().toISOString().split('T')[0];
-  let fechaConsulta = hoy;
 
-  const buildEndpoints = (fecha) => ({
-    openClose: `https://api.polygon.io/v1/open-close/${ticker}/${fecha}?apiKey=${apiKey}`,
+  const endpoints = {
+    openClose: `https://api.polygon.io/v1/open-close/${ticker}/${hoy}?apiKey=${apiKey}`,
     snapshot: `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}?apiKey=${apiKey}`,
     shortInterest: `https://api.polygon.io/v3/reference/shorts?ticker=${ticker}&apiKey=${apiKey}`,
     news: `https://api.polygon.io/v2/reference/news?ticker=${ticker}&limit=5&apiKey=${apiKey}`
-  });
+  };
 
-  let endpoints = buildEndpoints(fechaConsulta);
-
-  try {
-    let ocRes;
-
-    // Intentar hoy y si falla, retroceder un día hábil
+  // Función para hacer cada request con manejo de errores
+  const safeGet = async (url) => {
     try {
-      ocRes = await axios.get(endpoints.openClose);
-    } catch (err) {
-      if (err.response && err.response.status === 404) {
-        fechaConsulta = restarDias(hoy, 1);
-        endpoints = buildEndpoints(fechaConsulta);
-        ocRes = await axios.get(endpoints.openClose);
-      } else {
-        throw err;
-      }
+      const res = await axios.get(url);
+      return res.data;
+    } catch (e) {
+      console.warn(`⚠️ Error al llamar: ${url} => ${e.response?.status || e.message}`);
+      return null;
     }
+  };
 
-    const [snapRes, shortRes, newsRes] = await Promise.all([
-      axios.get(endpoints.snapshot),
-      axios.get(endpoints.shortInterest),
-      axios.get(endpoints.news)
-    ]);
+  // Obtener datos individualmente sin romper todo si uno falla
+  const [oc, snap, shortRaw, newsRaw] = await Promise.all([
+    safeGet(endpoints.openClose),
+    safeGet(endpoints.snapshot),
+    safeGet(endpoints.shortInterest),
+    safeGet(endpoints.news)
+  ]);
 
-    const oc = ocRes.data;
-    const snap = snapRes.data.ticker || {};
-    const short = shortRes.data.results ? shortRes.data.results[0] : {};
-    const news = newsRes.data.results || [];
+  // Construir el reporte con lo que esté disponible
+  const short = shortRaw?.results?.[0] || {};
+  const snapData = snap?.ticker || {};
+  const news = newsRaw?.results || [];
 
-    const reporte = {
-      status: 'OK',
-      symbol: ticker,
-      fecha: fechaConsulta,
-      precioActual: snap.lastTrade?.p || oc.close || null,
+  const reporte = {
+    status: 'OK',
+    symbol: ticker,
+    fecha: hoy,
+    precioActual: snapData.lastTrade?.p || oc?.close || null,
+    dailySummary: {
+      open: oc?.open || null,
+      high: oc?.high || null,
+      low: oc?.low || null,
+      close: oc?.close || null,
+      afterHours: oc?.afterHours || null,
+      preMarket: oc?.preMarket || null,
+      volume: oc?.volume || null
+    },
+    previousDay: {
+      open: snapData?.day?.o || null,
+      high: snapData?.day?.h || null,
+      low: snapData?.day?.l || null,
+      close: snapData?.day?.c || null,
+      volume: snapData?.day?.v || null
+    },
+    shortInterest: {
+      totalShort: short?.total_short_interest || null,
+      shortFloat: short?.short_interest_ratio || null,
+      dailyShortVolume: short?.short_volume || null,
+      daysToCover: short?.days_to_cover || null
+    },
+    fundamentales: {
+      marketCap: snapData?.market_cap || null,
+      peRatio: snapData?.pe || null,
+      eps: snapData?.eps || null,
+      dividendYield: snapData?.dividend_yield || null
+    },
+    noticias: news.map(n => ({
+      titulo: n.title,
+      resumen: n.description,
+      url: n.article_url,
+      fuente: n.publisher?.name || null,
+      fecha: n.published_utc
+    }))
+  };
 
-      dailySummary: {
-        open: oc.open || null,
-        high: oc.high || null,
-        low: oc.low || null,
-        close: oc.close || null,
-        afterHours: oc.afterHours || null,
-        preMarket: oc.preMarket || null,
-        volume: oc.volume || null
-      },
-
-      previousDay: {
-        open: snap.day?.o || null,
-        high: snap.day?.h || null,
-        low: snap.day?.l || null,
-        close: snap.day?.c || null,
-        volume: snap.day?.v || null
-      },
-
-      shortInterest: {
-        totalShort: short.total_short_interest || null,
-        shortFloat: short.short_interest_ratio || null,
-        dailyShortVolume: short.short_volume || null,
-        daysToCover: short.days_to_cover || null
-      },
-
-      fundamentales: {
-        marketCap: snap.market_cap || null,
-        peRatio: snap.pe || null,
-        eps: snap.eps || null,
-        dividendYield: snap.dividend_yield || null
-      },
-
-      noticias: news.map(n => ({
-        titulo: n.title,
-        resumen: n.description,
-        url: n.article_url,
-        fuente: n.publisher?.name || null,
-        fecha: n.published_utc
-      }))
-    };
-
-    return res.json(reporte);
-  } catch (error) {
-    return res.status(500).json({
-      error: true,
-      mensaje: 'Error interno al procesar el reporte',
-      detalle: error.message
-    });
-  }
+  return res.json(reporte);
 });
 
 app.listen(PORT, () => {
