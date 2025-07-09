@@ -450,7 +450,7 @@ if (!Array.isArray(velas.diario) || velas.diario.length === 0) {
 if (!ohlcCompleto || ohlcCompleto.length === 0) {
   return res.status(502).json({ error: "No hay datos OHLC disponibles para análisis técnico." });
 }
-        res.json({
+       res.json({
     symbol, timeframe,
     precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
     historico: precios.slice(-cantidad),
@@ -501,12 +501,14 @@ if (!ohlcCompleto || ohlcCompleto.length === 0) {
         estado,
         tiempoParaEvento
     }
-});
+  });
 
 } catch (err) {
     console.error(`Error ${symbol}: ${err.message}`);
-    res.status(500).json({ error: "Datos no disponibles" });
-}
+    return res.status(500).json({ error: "Datos no disponibles" });
+  }
+});
+
 app.get('/', (req, res) => res.send('Jarvis Mercado Blindado: Técnico Completo, Noticias, Insights y Volumen Acumulado Activo.'));
 
 app.listen(PORT, () => console.log(`🚀 Jarvis Mercado listo, estructura robusta mejorada y noticias integradas.`));
