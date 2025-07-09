@@ -48,10 +48,11 @@ app.get('/debug-hora', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
+
 
 async function obtenerPrecioTiempoReal(symbol) {
-  try {
+const API_KEY = process.env.API_KEY;  
+try {
     const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${API_KEY}`;
     const response = await axios.get(url);
 
@@ -77,7 +78,8 @@ async function obtenerPrecioTiempoReal(symbol) {
 
 async function obtenerFundamentales(symbol, precioRealVivo) {
     try {
-        const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`;
+        const API_KEY = process.env.API_KEY;
+        const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${API_KEY}`;
         const res = await axios.get(url);
         const d = res.data.results?.[0] || {};
 
