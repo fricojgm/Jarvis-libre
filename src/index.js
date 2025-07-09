@@ -51,21 +51,15 @@ const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 async function obtenerPrecioTiempoReal(symbol) {
-  try {
-    const url = `https://jarvis-libre.onrender.com/reporte-mercado/${symbol}`;
-    const res = await axios.get(url);
-    const precio = res.data?.precioActual;
-
-    if (typeof precio !== "number" || precio < 1 || precio > 100000) {
-      throw new Error(`⚠️ Precio inválido recibido para ${symbol}: ${precio}`);
+    try {
+        const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
+        const res = await axios.get(url);
+        if (res.data?.results?.p) return res.data.results.p;
+        throw new Error('Precio tiempo real no disponible');
+    } catch (err) {
+        console.error(`Error obteniendo precio en tiempo real ${symbol}:`, err.message);
+        return "N/A";
     }
-
-    return precio;
-
-  } catch (err) {
-    console.error(`❌ Error obteniendo precio real para ${symbol}:`, err.message);
-    return "N/A";
-  }
 }
 
 async function obtenerFundamentales(symbol, precioRealVivo) {
