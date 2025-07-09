@@ -48,38 +48,23 @@ app.get('/debug-hora', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-
+const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 async function obtenerPrecioTiempoReal(symbol) {
-const API_KEY = process.env.POLYGON_API_KEY;  
-try {
-    const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${API_KEY}`;
-    const response = await axios.get(url);
-
-    // Validaciones estrictas
-    if (
-      !response.data ||
-      !response.data.results ||
-      typeof response.data.results.p !== "number" ||
-      response.data.results.p < 1 ||
-      response.data.results.p > 10000
-    ) {
-      console.error("⚠️ Precio inválido recibido:", response.data.results?.p);
-      return "N/A"; // Forzamos parada en el backend
+    try {
+        const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
+        const res = await axios.get(url);
+        if (res.data?.results?.p) return res.data.results.p;
+        throw new Error('Precio tiempo real no disponible');
+    } catch (err) {
+        console.error(`Error obteniendo precio en tiempo real ${symbol}:`, err.message);
+        return "N/A";
     }
-
-    return response.data.results.p;
-
-  } catch (error) {
-    console.error("❌ Error obteniendo precio en tiempo real:", error.message);
-    return "N/A";
-  }
 }
 
 async function obtenerFundamentales(symbol, precioRealVivo) {
     try {
-        const API_KEY = process.env.POLYGON_API_KEY;
-        const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${API_KEY}`;
+        const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`;
         const res = await axios.get(url);
         const d = res.data.results?.[0] || {};
 
@@ -344,16 +329,6 @@ async function obtenerNoticiasConInsights(symbol) {
 
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
-const precioRealVivo = await obtenerPrecioTiempoReal(symbol);
-
-// Validación estricta del precio vivo
-if (precioRealVivo === "N/A" || typeof precioRealVivo !== "number") {
-  return res.status(500).json({ 
-    error: "❌ Precio actual inválido o no disponible desde el puente.",
-    ticker: symbol,
-    precio: precioRealVivo
-  });
-}
     const timeframe = req.query.timeframe || 'day';
     const cantidad = parseInt(req.query.cantidad) || 5000;
     const hoy = new Date().toISOString().split('T')[0];
@@ -363,8 +338,8 @@ if (precioRealVivo === "N/A" || typeof precioRealVivo !== "number") {
     const resumenDiario = await obtenerResumenDiario(symbol, hoy);
     const resumenAyer = await obtenerResumenDiario(symbol, fechaAyer);
     const shortData = await obtenerShortData(symbol);
-    const fundamentales = await obtenerFundamentales(symbol, precioRealVivo);
-    
+    const fundamentales = await obtenerFundamentales(symbol);
+
     try {
         const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
         const resPrecio = await axios.get(url);
@@ -381,9 +356,7 @@ if (precioRealVivo === "N/A" || typeof precioRealVivo !== "number") {
         })).reverse();
 
         if (ohlcCompleto.length > 0 && esVelaAbierta(ohlcCompleto.at(-1), timeframe)) ohlcCompleto.pop();
-    const precioActualUrl = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
-    const resPrecioActual = await axios.get(precioActualUrl);
-    const precioActual = resPrecioActual.data.results.p;
+
         const precios = ohlcCompleto.map(c => c.cierre);
         const ohlc = ohlcCompleto.slice(-2);
 
@@ -426,14 +399,9 @@ if (horaNY < apertura) {
         const shortVolume = await obtenerShortVolume(symbol);
         const velas = await obtenerVelas(symbol);
 
-if (precioRealVivo === "N/A" || typeof precioRealVivo !== "number") {
-    return res.status(500).json({ error: "❌ Precio actual inválido o no disponible. No se permite fallback a histórico." });
-}
-
-
         res.json({
             symbol, timeframe,
-            precioActual: precioRealVivo,
+            precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
             historico: precios.slice(-cantidad),
             rsi, macd, patron, atr, adx, vwap,
             bollingerBands: bb,
