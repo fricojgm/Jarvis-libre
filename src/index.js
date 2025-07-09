@@ -369,58 +369,64 @@ if (horaNY < apertura) {
         const velas = await obtenerVelas(symbol);
 
         res.json({
-            symbol, timeframe,
-            precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
-            historico: precios.slice(-cantidad),
-            rsi, macd, patron, atr, adx, vwap,
-            bollingerBands: bb,
-            velas: {
-                diario: velas.diario,
-                semanal: velas.semanal,
-                mensual: velas.mensual,
-                hora: velas.hora
-            },
+  symbol,
+  timeframe,
+  precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
+  historico: precios.slice(-cantidad),
+  rsi,
+  macd,
+  patron,
+  atr,
+  adx,
+  vwap,
+  bollingerBands: bb,
 
-           fundamentales: {
-               marketCap: fundamentales.marketCap,
-               eps: fundamentales.eps,
-               peRatio: fundamentales.peRatio
-           },
+  velas: {
+    diario: velas.diario,
+    semanal: velas.semanal,
+    mensual: velas.mensual,
+    hora: velas.hora,
+  },
 
-           shortInterest: {
-               shortInterestTotal: shortData.shortInterestTotal,
-               avgDailyVolume: shortData.avgDailyVolume,
-               daysToCover: shortData.daysToCover
-           },
+  fundamentales: {
+    marketCap: fundamentales.marketCap,
+    eps: fundamentales.eps,
+    peRatio: fundamentales.peRatio,
+  },
 
-           shortVolume: {
-               shortVolume: shortVolume.shortVolume,
-               shortVolumeRatio: shortVolume.shortVolumeRatio,
-               totalVolume: shortVolume.totalVolume
-            },
+  shortInterest: {
+    shortInterestTotal: shortData.shortInterestTotal,
+    avgDailyVolume: shortData.avgDailyVolume,
+    daysToCover: shortData.daysToCover,
+  },
 
-            volumen: {
-                volumenActual: ohlcCompleto.at(-1)?.volumen || "N/A",
-                volumenPromedio30Dias: (ohlcCompleto.slice(-30).map(c => c.volumen).reduce((a, b) => a + b, 0) / Math.min(ohlcCompleto.length, 30)).toFixed(2),
-                volumenAcumulado: volumenAcum
-            },
+  shortVolume: {
+    shortVolume: shortVolume.shortVolume,
+    shortVolumeRatio: shortVolume.shortVolumeRatio,
+    totalVolume: shortVolume.totalVolume,
+  },
 
-            
-            
-            
-            shortInterest: shortData.shortInterestTotal,
-            avgDailyVolume: shortData.avgDailyVolume,
-            daysToCover: shortData.daysToCover,
-            moneyFlowIndex: mfi,
-            tecnicoCombinado: tecnicoCombo,
-            noticias,
-	    horaNY: horaNY.toISOString(),
-            horaLocal: horaLocal.toISOString(),
-            mercado: {
-             estado,
-             tiempoParaEvento
-           }
-        });
+  volumen: {
+    volumenActual: ohlcCompleto.at(-1)?.volumen || "N/A",
+    volumenPromedio30Dias: (
+      ohlcCompleto.slice(-30).map(c => c.volumen).reduce((a, b) => a + b, 0) /
+      Math.min(ohlcCompleto.length, 30)
+    ).toFixed(2),
+    volumenAcumulado: volumenAcum,
+  },
+
+  moneyFlowIndex: mfi,
+  tecnicoCombinado: tecnicoCombo,
+  noticias,
+
+  horaNY: horaNY.toISOString(),
+  horaLocal: horaLocal.toISOString(),
+
+  mercado: {
+    estado,
+    tiempoParaEvento,
+  }
+});
 
     } catch (err) {
         console.error(`Error ${symbol}: ${err.message}`);
