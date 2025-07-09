@@ -306,8 +306,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const ayer = new Date();
     ayer.setDate(ayer.getDate() - 1);
     const fechaAyer = ayer.toISOString().split('T')[0];
-    const resumenDiario = await obtenerResumenDiario(symbol, hoy);
-    const resumenAyer = await obtenerResumenDiario(symbol, fechaAyer);
     const shortData = await obtenerShortData(symbol);
     const fundamentales = await obtenerFundamentales(symbol);
 
