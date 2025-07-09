@@ -18,7 +18,14 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
     openClose: `https://api.polygon.io/v1/open-close/${symbol}/${hoy}?apiKey=${apiKey}`,
     snapshot: `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${apiKey}`,
     shortInterest: `https://api.polygon.io/v3/reference/shorts?ticker=${symbol}&apiKey=${apiKey}`,
-    news: `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${apiKey}`
+    news: `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${apiKey}
+    technicalRSI: `https://api.polygon.io/v1/indicators/rsi/${symbol}?timespan=day&window=14&series_type=close&order=desc&apiKey=${apiKey}`,
+    technicalMACD: `https://api.polygon.io/v1/indicators/macd/${symbol}?timespan=day&long_window=26&short_window=12&signal_window=9       &series_type=close&order=desc&apiKey=${apiKey}`,
+    technicalBollinger: `https://api.polygon.io/v1/indicators/bollinger_bands/${symbol}?timespan=day&window=20&series_type=close&order=desc&apiKey=${apiKey}`,
+    technicalATR: `https://api.polygon.io/v1/indicators/atr/${symbol}?timespan=day&window=14&order=desc&apiKey=${apiKey}`,
+    technicalADX: `https://api.polygon.io/v1/indicators/adx/${symbol}?timespan=day&window=14&order=desc&apiKey=${apiKey}`,
+    technicalMFI: `https://api.polygon.io/v1/indicators/mfi/${symbol}?timespan=day&window=14&order=desc&apiKey=${apiKey}`,
+    technicalVWAP: `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${apiKey}``
   };
 
   const safeGet = async (url) => {
@@ -32,12 +39,31 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
   };
 
   try {
-    const [oc, snap, short, newsRaw] = await Promise.all([
-      safeGet(endpoints.openClose),
-      safeGet(endpoints.snapshot),
-      safeGet(endpoints.shortInterest),
-      safeGet(endpoints.news)
-    ]);
+  const [
+  oc, 
+  snap, 
+  short, 
+  newsRaw,
+  rsiRaw,
+  macdRaw,
+  bollingerRaw,
+  atrRaw,
+  adxRaw,
+  mfiRaw,
+  vwapRaw
+] = await Promise.all([
+  safeGet(endpoints.openClose),
+  safeGet(endpoints.snapshot),
+  safeGet(endpoints.shortInterest),
+  safeGet(endpoints.news),
+  safeGet(endpoints.technicalRSI),
+  safeGet(endpoints.technicalMACD),
+  safeGet(endpoints.technicalBollinger),
+  safeGet(endpoints.technicalATR),
+  safeGet(endpoints.technicalADX),
+  safeGet(endpoints.technicalMFI),
+  safeGet(endpoints.technicalVWAP)
+]);
 
     const news = Array.isArray(newsRaw?.results) ? newsRaw.results : [];
 
@@ -48,6 +74,24 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
       fuente: n.publisher?.name || null,
       fecha: n.published_utc
     })) || [];
+
+const indicadoresTecnicos = {
+  RSI: rsiRaw?.results?.values?.[0]?.value || null,
+  MACD: {
+    macd: macdRaw?.results?.values?.[0]?.value || null,
+    signal: macdRaw?.results?.values?.[0]?.signal || null,
+    histogram: macdRaw?.results?.values?.[0]?.histogram || null
+  },
+  Bollinger: {
+    upper: bollingerRaw?.results?.values?.[0]?.upper || null,
+    middle: bollingerRaw?.results?.values?.[0]?.middle || null,
+    lower: bollingerRaw?.results?.values?.[0]?.lower || null
+  },
+  ATR: atrRaw?.results?.values?.[0]?.value || null,
+  ADX: adxRaw?.results?.values?.[0]?.value || null,
+  MFI: mfiRaw?.results?.values?.[0]?.value || null,
+  VWAP: vwapRaw?.results?.values?.[0]?.value || null
+};
 
     const reporte = {
       status: 'OK',
@@ -82,6 +126,7 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
         eps: snap?.eps || null,
         dividendYield: snap?.dividend_yield || null
       },
+      indicadoresTecnicos,
       noticias
     };
 
