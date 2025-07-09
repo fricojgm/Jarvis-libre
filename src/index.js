@@ -13,35 +13,58 @@ const getHoraRD = () => {
   return ahora.toLocaleString("es-DO", { timeZone: "America/Santo_Domingo" });
 };
 
+async function safeGet(url, nombre) {
+  try {
+    const r = await axios.get(url);
+    return r;
+  } catch (e) {
+    console.error(`❌ Error en ${nombre}:`, url, "->", e.response?.status || e.message);
+    return { data: null };
+  }
+}
+
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const symbol = req.params.symbol.toUpperCase();
+
+  const urlSnapshot = `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`;
+  const urlOpenClose = `https://api.polygon.io/v1/open-close/${symbol}/prev?adjusted=true&apiKey=${POLYGON_API_KEY}`;
+  const urlFinancials = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${POLYGON_API_KEY}`;
+  const urlFundamentals = `https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`;
+  const urlNews = `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${POLYGON_API_KEY}`;
+  const urlShortData = `https://api.polygon.io/v3/reference/shorts?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`;
+  const urlShortVol = urlSnapshot;
+  const urlVelasDia = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/2024-01-01/2025-01-01?adjusted=true&sort=desc&limit=365&apiKey=${POLYGON_API_KEY}`;
+  const urlVelasSem = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/week/2024-01-01/2025-01-01?adjusted=true&sort=desc&limit=52&apiKey=${POLYGON_API_KEY}`;
+  const urlVelasMes = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/month/2024-01-01/2025-01-01?adjusted=true&sort=desc&limit=12&apiKey=${POLYGON_API_KEY}`;
+
   try {
-    const [snapshot, openClose, financials, fundamentals, news, shortData, shortVol,
-           velasDia, velasSem, velasMes] = await Promise.all([
-      axios.get(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`),
-      axios.get(`https://api.polygon.io/v1/open-close/${symbol}/prev?adjusted=true&apiKey=${POLYGON_API_KEY}`),
-      axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${POLYGON_API_KEY}`),
-      axios.get(`https://api.polygon.io/v3/reference/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`),
-      axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${POLYGON_API_KEY}`),
-      axios.get(`https://api.polygon.io/v3/reference/shorts?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`),
-      axios.get(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${POLYGON_API_KEY}`),
-      axios.get(`https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/2024-01-01/2025-01-01?adjusted=true&sort=desc&limit=365&apiKey=${POLYGON_API_KEY}`),
-      axios.get(`https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/week/2024-01-01/2025-01-01?adjusted=true&sort=desc&limit=52&apiKey=${POLYGON_API_KEY}`),
-      axios.get(`https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/month/2024-01-01/2025-01-01?adjusted=true&sort=desc&limit=12&apiKey=${POLYGON_API_KEY}`)
+    const [
+      snapshot, openClose, financials, fundamentals, news, shortData,
+      shortVol, velasDia, velasSem, velasMes
+    ] = await Promise.all([
+      safeGet(urlSnapshot, "snapshot"),
+      safeGet(urlOpenClose, "openClose"),
+      safeGet(urlFinancials, "financials"),
+      safeGet(urlFundamentals, "fundamentals"),
+      safeGet(urlNews, "news"),
+      safeGet(urlShortData, "shortData"),
+      safeGet(urlShortVol, "shortVol"),
+      safeGet(urlVelasDia, "velasDia"),
+      safeGet(urlVelasSem, "velasSem"),
+      safeGet(urlVelasMes, "velasMes")
     ]);
 
     const ticker = snapshot.data?.ticker;
     const precioActual = ticker?.lastTrade?.p || null;
     const cierrePrevio = openClose.data?.close || null;
-    const open = openClose.data?.open;
-    const high = openClose.data?.high;
-    const low = openClose.data?.low;
-    const volume = openClose.data?.volume;
 
-    const validado = precioActual && cierrePrevio && Math.abs(precioActual - cierrePrevio) / cierrePrevio <= 0.015;
-    if (!validado) {
-      return res.status(400).json({ error: 'Precio actual inválido o fuera de rango aceptable.' });
+    if (!precioActual || !cierrePrevio) {
+      return res.status(500).json({ error: "Precio actual o cierre previo no disponible." });
     }
+
+    const resumen = precioActual > cierrePrevio
+      ? 'Tendencia alcista leve, se sugiere observar o comprar con cautela'
+      : 'Tendencia bajista leve, se sugiere mantener o esperar confirmación';
 
     const noticias = news.data?.results?.map(n => ({
       titulo: n.title,
@@ -50,55 +73,14 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       fecha: n.published_utc
     }));
 
-    const resumen = precioActual > cierrePrevio
-      ? 'Tendencia alcista leve, se sugiere observar o comprar con cautela'
-      : 'Tendencia bajista leve, se sugiere mantener o esperar confirmación';
-
     res.json({
       symbol,
       horaNY: getHoraNY(),
       horaRD: getHoraRD(),
       precioActual,
-      dailySummary: { open, high, low, close: cierrePrevio, volume },
-      previousDay: openClose.data,
-      shortInterest: {
-        totalShort: shortData.data?.results?.short_interest,
-        percentFloat: shortData.data?.results?.short_percent_float,
-        shortVolume: shortVol.data?.ticker?.todaysChange,
-        daysToCover: shortData.data?.results?.days_to_cover
-      },
-      fundamentos: {
-        marketCap: fundamentals.data?.results?.[0]?.market_cap,
-        peRatio: financials.data?.results?.[0]?.financials?.income_statement?.pe_ratio,
-        eps: financials.data?.results?.[0]?.financials?.income_statement?.eps,
-        dividendYield: financials.data?.results?.[0]?.financials?.income_statement?.dividends
-      },
-      tecnico: {
-        rsi: "Pendiente integración",
-        macd: "Pendiente integración",
-        vwap: "Pendiente integración",
-        atr: "Pendiente integración",
-        adx: "Pendiente integración",
-        mfi: "Pendiente integración",
-        bollingerBands: {
-          superior: "Pendiente",
-          inferior: "Pendiente"
-        }
-      },
-      velas: {
-        diario: velasDia.data?.results ?? [],
-        semanal: velasSem.data?.results ?? [],
-        mensual: velasMes.data?.results ?? []
-      },
-      noticias,
-      estadoMercado: ticker?.marketStatus,
+      cierrePrevio,
       resumen,
-      tecnicoCombinado: resumen,
-      soportesResistencias: {
-        soporte1: "Pendiente",
-        resistencia1: "Pendiente"
-      },
-      patron: "Sin patrón técnico confirmado aún"
+      noticias
     });
 
   } catch (e) {
@@ -108,5 +90,5 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Jarvis Mercado blindado completo activo en puerto ${PORT}`);
+  console.log(`🧪 Jarvis Mercado con logging activo en puerto ${PORT}`);
 });
