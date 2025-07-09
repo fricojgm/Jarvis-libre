@@ -8,14 +8,29 @@ const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 app.get('/reporte-mercado/:ticker', async (req, res) => {
   const { ticker } = req.params;
-  const hoy = new Date().toISOString().split('T')[0];
+  const endpoint = `https://jarvis-libre.onrender.com/reporte-mercado/${ticker}`;
 
-  const endpoints = {
-    openClose: `https://api.polygon.io/v1/open-close/${ticker}/${hoy}?apiKey=${apiKey}`,
-    snapshot: `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}?apiKey=${apiKey}`,
-    shortInterest: `https://api.polygon.io/v3/reference/shorts?ticker=${ticker}&apiKey=${apiKey}`,
-    news: `https://api.polygon.io/v2/reference/news?ticker=${ticker}&limit=5&apiKey=${apiKey}`
-  };
+  try {
+    const response = await axios.get(endpoint);
+
+    if (response.status !== 200 || !response.data) {
+      return res.status(502).json({
+        error: true,
+        mensaje: 'Error al obtener datos del puente',
+        detalle: response.statusText
+      });
+    }
+
+    return res.json(response.data);
+
+  } catch (error) {
+    return res.status(500).json({
+      error: true,
+      mensaje: 'Error interno al procesar el reporte',
+      detalle: error.message
+    });
+  }
+});
 
   try {
     const [ocRes, snapRes, shortRes, newsRes] = await Promise.all([
