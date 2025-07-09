@@ -407,10 +407,7 @@ if (horaNY < apertura) {
 
             
             
-            aperturaDiaAnterior: resumenAyer.apertura,
-            minimoDiaAnterior: resumenAyer.minimo,
-            maximoDiaAnterior: resumenAyer.maximo,
-            cierreDiaAnterior: resumenAyer.cierre,
+            ,
             shortInterest: shortData.shortInterestTotal,
             avgDailyVolume: shortData.avgDailyVolume,
             daysToCover: shortData.daysToCover,
