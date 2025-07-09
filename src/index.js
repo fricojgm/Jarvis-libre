@@ -503,6 +503,10 @@ if (!ohlcCompleto || ohlcCompleto.length === 0) {
     }
 });
 
+} catch (err) {
+    console.error(`Error ${symbol}: ${err.message}`);
+    res.status(500).json({ error: "Datos no disponibles" });
+}
 app.get('/', (req, res) => res.send('Jarvis Mercado Blindado: Técnico Completo, Noticias, Insights y Volumen Acumulado Activo.'));
 
 app.listen(PORT, () => console.log(`🚀 Jarvis Mercado listo, estructura robusta mejorada y noticias integradas.`));
