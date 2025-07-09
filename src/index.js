@@ -51,7 +51,7 @@ const PORT = process.env.PORT || 3000;
 
 
 async function obtenerPrecioTiempoReal(symbol) {
-const API_KEY = process.env.API_KEY;  
+const API_KEY = process.env.POLYGON_API_KEY;  
 try {
     const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${API_KEY}`;
     const response = await axios.get(url);
@@ -78,7 +78,7 @@ try {
 
 async function obtenerFundamentales(symbol, precioRealVivo) {
     try {
-        const API_KEY = process.env.API_KEY;
+        const API_KEY = process.env.POLYGON_API_KEY;
         const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${API_KEY}`;
         const res = await axios.get(url);
         const d = res.data.results?.[0] || {};
