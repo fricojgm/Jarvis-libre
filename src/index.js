@@ -279,35 +279,6 @@ function getWeekNumber(d) {
     return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
-async function obtenerResumenDiario(symbol, fecha) {
-    try {
-        const url = `https://api.polygon.io/v1/open-close/${symbol}/${fecha}?adjusted=true&apiKey=${POLYGON_API_KEY}`;
-        const res = await axios.get(url);
-        const d = res.data;
-
-        return {
-            apertura: d.open ?? "N/A",
-            maximo: d.high ?? "N/A",
-            minimo: d.low ?? "N/A",
-            cierre: d.close ?? "N/A",
-            volumen: d.volume ?? "N/A",
-            afterHours: d.afterHours ?? "N/A",
-            preMarket: d.preMarket ?? "N/A"
-        };
-
-    } catch (err) {
-        console.error(`Error Resumen Diario ${symbol}:`, err.message);
-        return {
-            apertura: "N/A",
-            maximo: "N/A",
-            minimo: "N/A",
-            cierre: "N/A",
-            volumen: "N/A",
-            afterHours: "N/A",
-            preMarket: "N/A"
-        };
-    }
-}
 
 async function obtenerNoticiasConInsights(symbol) {
     try {
