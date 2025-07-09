@@ -51,15 +51,28 @@ const PORT = process.env.PORT || 3000;
 const POLYGON_API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 async function obtenerPrecioTiempoReal(symbol) {
-    try {
-        const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${POLYGON_API_KEY}`;
-        const res = await axios.get(url);
-        if (res.data?.results?.p) return res.data.results.p;
-        throw new Error('Precio tiempo real no disponible');
-    } catch (err) {
-        console.error(`Error obteniendo precio en tiempo real ${symbol}:`, err.message);
-        return "N/A";
+  try {
+    const url = `https://api.polygon.io/v2/last/trade/${symbol}?apiKey=${API_KEY}`;
+    const response = await axios.get(url);
+
+    // Validaciones estrictas
+    if (
+      !response.data ||
+      !response.data.results ||
+      typeof response.data.results.p !== "number" ||
+      response.data.results.p < 1 ||
+      response.data.results.p > 10000
+    ) {
+      console.error("⚠️ Precio inválido recibido:", response.data.results?.p);
+      return "N/A"; // Forzamos parada en el backend
     }
+
+    return response.data.results.p;
+
+  } catch (error) {
+    console.error("❌ Error obteniendo precio en tiempo real:", error.message);
+    return "N/A";
+  }
 }
 
 async function obtenerFundamentales(symbol, precioRealVivo) {
@@ -329,6 +342,16 @@ async function obtenerNoticiasConInsights(symbol) {
 
 app.get('/reporte-mercado/:symbol', async (req, res) => {
     const symbol = req.params.symbol.toUpperCase();
+const precioRealVivo = await obtenerPrecioTiempoReal(symbol);
+
+// Validación estricta del precio vivo
+if (precioRealVivo === "N/A" || typeof precioRealVivo !== "number") {
+  return res.status(500).json({ 
+    error: "❌ Precio actual inválido o no disponible desde el puente.",
+    ticker: symbol,
+    precio: precioRealVivo
+  });
+}
     const timeframe = req.query.timeframe || 'day';
     const cantidad = parseInt(req.query.cantidad) || 5000;
     const hoy = new Date().toISOString().split('T')[0];
@@ -338,7 +361,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const resumenDiario = await obtenerResumenDiario(symbol, hoy);
     const resumenAyer = await obtenerResumenDiario(symbol, fechaAyer);
     const shortData = await obtenerShortData(symbol);
-    const fundamentales = await obtenerFundamentales(symbol);
+    const fundamentales = await obtenerFundamentales(symbol, precioRealVivo);
     
     try {
         const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/2010-01-01/${hoy}?adjusted=true&sort=desc&limit=${cantidad}&apiKey=${POLYGON_API_KEY}`;
