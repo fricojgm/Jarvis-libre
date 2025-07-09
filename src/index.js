@@ -8,29 +8,16 @@ const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 app.get('/reporte-mercado/:ticker', async (req, res) => {
   const { ticker } = req.params;
-  const endpoint = `https://jarvis-libre.onrender.com/reporte-mercado/${ticker}`;
 
-  try {
-    const response = await axios.get(endpoint);
+  // Fecha actual en formato YYYY-MM-DD
+  const hoy = new Date().toISOString().split('T')[0];
 
-    if (response.status !== 200 || !response.data) {
-      return res.status(502).json({
-        error: true,
-        mensaje: 'Error al obtener datos del puente',
-        detalle: response.statusText
-      });
-    }
-
-    return res.json(response.data);
-
-  } catch (error) {
-    return res.status(500).json({
-      error: true,
-      mensaje: 'Error interno al procesar el reporte',
-      detalle: error.message
-    });
-  }
-});
+  const endpoints = {
+    openClose: `https://api.polygon.io/v1/open-close/${ticker}/${hoy}?apiKey=${apiKey}`,
+    snapshot: `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${ticker}?apiKey=${apiKey}`,
+    shortInterest: `https://api.polygon.io/v3/reference/shorts?ticker=${ticker}&apiKey=${apiKey}`,
+    news: `https://api.polygon.io/v2/reference/news?ticker=${ticker}&limit=5&apiKey=${apiKey}`
+  };
 
   try {
     const [ocRes, snapRes, shortRes, newsRes] = await Promise.all([
@@ -94,6 +81,7 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
     };
 
     return res.json(reporte);
+
   } catch (error) {
     return res.status(500).json({
       error: true,
@@ -104,5 +92,5 @@ app.get('/reporte-mercado/:ticker', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`âœ… Servidor corriendo en el puerto ${PORT}`);
+  console.log(`✅ Servidor corriendo en el puerto ${PORT}`);
 });
