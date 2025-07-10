@@ -66,30 +66,105 @@ async function obtenerOHLC(ticker) {
   }));
 }
 
+function calcularMFI(ohlcData) {
+    const period = 14;
+    const typicalPrices = ohlcData.map(c => (c.alto + c.bajo + c.cierre) / 3);
+    const moneyFlows = typicalPrices.map((tp, i) => tp * ohlcData[i].volumen);
+
+    let positiveFlow = 0, negativeFlow = 0;
+    for (let i = 1; i < period + 1; i++) {
+        if (typicalPrices[i] > typicalPrices[i - 1]) {
+            positiveFlow += moneyFlows[i];
+        } else if (typicalPrices[i] < typicalPrices[i - 1]) {
+            negativeFlow += moneyFlows[i];
+        }
+    }
+
+
+
+    const moneyRatio = positiveFlow / (negativeFlow || 1);
+    const mfi = 100 - (100 / (1 + moneyRatio));
+    return parseFloat(mfi.toFixed(2));
+}
+
+function calcularRSI(ohlcData, period = 14) {
+  const cierres = ohlcData.map(c => c.cierre);
+  let ganancias = 0, perdidas = 0;
+
+  for (let i = 1; i <= period; i++) {
+    const cambio = cierres[i] - cierres[i - 1];
+    if (cambio > 0) ganancias += cambio;
+    else perdidas -= cambio;
+  }
+
+  let rs = ganancias / (perdidas || 1);
+  let rsi = [100 - (100 / (1 + rs))];
+
+  for (let i = period + 1; i < cierres.length; i++) {
+    const cambio = cierres[i] - cierres[i - 1];
+    const ganancia = cambio > 0 ? cambio : 0;
+    const perdida = cambio < 0 ? -cambio : 0;
+
+    ganancias = ((ganancias * (period - 1)) + ganancia) / period;
+    perdidas = ((perdidas * (period - 1)) + perdida) / period;
+
+    rs = ganancias / (perdidas || 1);
+    rsi.push(100 - (100 / (1 + rs)));
+  }
+
+  return parseFloat(rsi[rsi.length - 1].toFixed(2));
+}
+
+function calcularMACD(ohlcData) {
+  const cierres = ohlcData.map(c => c.cierre);
+
+  const ema = (datos, periodo) => {
+    const k = 2 / (periodo + 1);
+    let emaArray = [datos.slice(0, periodo).reduce((a, b) => a + b) / periodo];
+    for (let i = periodo; i < datos.length; i++) {
+      emaArray.push((datos[i] - emaArray[emaArray.length - 1]) * k + emaArray[emaArray.length - 1]);
+    }
+    return emaArray;
+  };
+
+  const ema12 = ema(cierres, 12);
+  const ema26 = ema(cierres, 26);
+  const macdLine = ema12.slice(-ema26.length).map((v, i) => v - ema26[i]);
+  const signalLine = ema(macdLine, 9);
+  const macdFinal = macdLine[macdLine.length - 1];
+  const signalFinal = signalLine[signalLine.length - 1];
+  const histogram = macdFinal - signalFinal;
+
+  return {
+    macd: parseFloat(macdFinal.toFixed(2)),
+    signal: parseFloat(signalFinal.toFixed(2)),
+    histogram: parseFloat(histogram.toFixed(2))
+  };
+}
+
+
 app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
-  const ticker = req.params.ticker.toUpperCase(); 
+  const ticker = req.params.ticker.toUpperCase();
 
   try {
-    const ohlc = await obtenerOHLC(ticker); // función que debes tener
+    const ohlc = await obtenerOHLC(ticker); // función que ya tienes
     const precios = ohlc.map(c => c.cierre);
 
-    const rsi = calcularRSI(precios);
-    const macd = calcularMACD(precios);
-    const atr = calcularATR(ohlc);
-    const adx = calcularADX(ohlc);
-    const vwap = calcularVWAP(ohlc);
+    const rsi = calcularRSI(ohlc);
     const mfi = calcularMFI(ohlc);
-    const bb = calcularBollingerBands(precios);
-    const patron = detectarPatronVelas(ohlc);
-    const tecnicoCombo = analisisCombinado(rsi, macd, patron, mfi);
+    const macd = calcularMACD(ohlc);
 
     res.json({
-      rsi, macd, atr, adx, vwap, mfi, bollingerBands: bb, patron, tecnicoCombo
+      ticker,
+      indicadores: {
+        RSI: rsi,
+        MFI: mfi,
+        MACD: macd
+      }
     });
-
-  } catch (err) {
-    console.error(`Error técnicos ${ticker}:`, err.message);
-    res.status(500).json({ error: 'Error calculando técnicos' });
+  } catch (error) {
+    console.error(`Error técnicos ${ticker}:`, error.message);
+    res.status(500).json({ error: `Error técnicos ${ticker}: ${error.message}` });
   }
 });
 
