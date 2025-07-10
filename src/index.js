@@ -420,7 +420,7 @@ if (horaNY < apertura) {
 
            fundamental: {
                marketCap: fundamentales.marketCap,
-               peRatio: fundamentales.peRatio
+               peRatio: fundamentales.peRatio,
                eps: fundamentales.eps,
                dividenYield: fundamentales.dividenYield
                
