@@ -272,7 +272,6 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
     const patron = "Doji"; // si no tienes lógica real, deja fijo por ahora
     const tecnicoCombo = "Precaución: RSI y MFI neutros. MACD bajista"; // igual, puedes simularlo
     const horaNY = obtenerHoraNuevaYork();
-    const horaLocal = obtenerHoraLocal();
     const estadoMercado = obtenerEstadoMercado(horaNY);
 
 
