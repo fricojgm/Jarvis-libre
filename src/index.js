@@ -123,23 +123,40 @@ function calcularRSI(ohlcData, period = 14) {
 function calcularVWAP(ohlcData) {
   let totalVolume = 0;
   let totalPV = 0;
+
   ohlcData.forEach(c => {
-    const typicalPrice = (c.alto + c.bajo + c.cierre) / 3;
-    totalPV += typicalPrice * c.volumen;
-    totalVolume += c.volumen;
+    if (c.volumen && c.alto && c.bajo && c.cierre) { // validación robusta
+      const typicalPrice = (c.alto + c.bajo + c.cierre) / 3;
+      totalPV += typicalPrice * c.volumen;
+      totalVolume += c.volumen;
+    }
   });
+
+  if (totalVolume === 0) return null; // evita división por cero
+
   return parseFloat((totalPV / totalVolume).toFixed(2));
 }
 
 function calcularATR(ohlcData, period = 14) {
   let trs = [];
+
   for (let i = 1; i < ohlcData.length; i++) {
     const high = ohlcData[i].alto;
     const low = ohlcData[i].bajo;
     const prevClose = ohlcData[i - 1].cierre;
-    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
-    trs.push(tr);
+
+    if (high && low && prevClose) { // validación de datos
+      const tr = Math.max(
+        high - low,
+        Math.abs(high - prevClose),
+        Math.abs(low - prevClose)
+      );
+      trs.push(tr);
+    }
   }
+
+  if (trs.length < period) return null; // evita errores si hay pocas velas
+
   const atr = trs.slice(-period).reduce((a, b) => a + b, 0) / period;
   return parseFloat(atr.toFixed(2));
 }
