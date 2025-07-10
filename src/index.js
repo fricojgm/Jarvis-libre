@@ -289,6 +289,7 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
         BollingerBands: {
           superior: bollinger.superior,
           inferior: bollinger.inferior
+         }
         },
         patron,
         tecnicoCombo,
@@ -299,13 +300,14 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   cierre: ultimaVela.cierre,
   volumen: ultimaVela.volumen,
   fecha: ultimaVela.fecha,
+ },
   horaNY,
   horaLocal,
   mercado: {
-  estado: estadoMercado
+     estado: estadoMercado
+   }
 
-      }
-    });
+    
   } catch (error) {
     console.error(`Error técnicos ${ticker}:`, error.message);
     res.status(500).json({ error: `Error técnicos ${ticker}: ${error.message}` });
