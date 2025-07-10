@@ -51,7 +51,7 @@ async function obtenerOHLC(ticker) {
   const inicio = inicioObj.toISOString().split('T')[0];
 
   // Construye la URL para traer velas diarias (1/day)
-  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/2024-01-01/2025-12-31?limit=30&sort=desc&apiKey=${API_KEY}`;
+  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/2024-01-01/2025-12-31?limit=30&sort=desc&apiKey=${apiKey}`;
   console.log("URL solicitada:", url);
 
   const res = await axios.get(url);
