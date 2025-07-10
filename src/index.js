@@ -251,6 +251,8 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
 
   try {
+    const response = await axios.get(`https://jarvis-libre.onrender.com/reporte-mercado/${ticker}`);
+    const json = response.data;
     const ohlc = await obtenerOHLC(ticker);
     console.log( 'OHLC data:', ohlc);
     const ultimaVela = ohlc[ohlc.length - 1]; // última vela disponible
