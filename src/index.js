@@ -303,7 +303,6 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   horaLocal,
   mercado: {
   estado: estadoMercado
-}
 
       }
     });
