@@ -100,7 +100,7 @@ async function obtenerOHLC(ticker) {
       histogram: "N/A"
     };
   }
-}
+
 
 async function obtenerShortInterest(ticker) {
   try {
