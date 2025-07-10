@@ -293,7 +293,7 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
           marketCap: marketCap,
           eps: eps,
           peRatio: peRatio
-          dividenYield: dividenYield
+          
          }
         BollingerBands: {
           superior: bollinger.superior,
@@ -317,8 +317,8 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
  fundamentales: {
     marketCap: json.fundamental.marketCap,
     eps: json.fundamental.eps,
-    peRatio: json.fundamental.peRatio,
-    dividendYield: dividendYield || null
+    peRatio: json.fundamental.peRatio
+    
   },
   shortInterest: {
     shortVolume: json.shortVolume.shortVolume,
