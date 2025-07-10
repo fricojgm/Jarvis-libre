@@ -42,10 +42,12 @@ app.get('/debug-hora', async (req, res) => {
 
 async function obtenerOHLC(ticker) {
   const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V'; // Tu clave real
-  const hoy = new Date().toISOString().split('T')[0]; // fecha de hoy
+  const hoyObj = new Date();
+  hoyObj.setDate(hoyObj.getDate() - 1); // Resta un día
+  const hoy = hoyObj.toISOString().split('T')[0];
   const inicio = '2024-06-01'; // puedes ajustar
 
-  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/30/${inicio}/${hoy}?adjusted=true&sort=asc&apiKey=${apiKey}`;
+  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${inicio}/${hoy}?adjusted=true&sort=asc&apiKey=${apiKey}`;
   console.log("URL solicitada:", url);
   const res = await axios.get(url);
 
