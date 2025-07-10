@@ -46,7 +46,7 @@ async function obtenerOHLC(ticker) {
   const inicio = '2024-06-01'; // puedes ajustar
 
   const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/30/${inicio}/${hoy}?adjusted=true&sort=asc&apiKey=${apiKey}`;
-
+  console.log("URL solicitada:", url);
   const res = await axios.get(url);
 
   if (!res.data.results || res.data.results.length === 0) {
@@ -65,7 +65,7 @@ async function obtenerOHLC(ticker) {
 }
 
 app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
-  const { ticker } = req.params;
+  const ticker = req.params.ticker.toUpperCase(); 
 
   try {
     const ohlc = await obtenerOHLC(ticker); // función que debes tener
