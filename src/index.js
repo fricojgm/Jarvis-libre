@@ -41,7 +41,7 @@ app.get('/debug-hora', async (req, res) => {
 
 
 async function obtenerOHLC(ticker) {
-    const apiKey = 'PxOMBWjCFxSbfan_jH9LAkP4oA4Fy1J3V'; // Tu clave real
+    const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V'; // Tu clave real
 
     const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/prev?adjusted=true&apiKey=${apiKey}`;
 
