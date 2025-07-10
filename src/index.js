@@ -121,23 +121,25 @@ function calcularRSI(ohlcData, period = 14) {
 }
 
 function calcularVWAP(ohlcData) {
+  // Filtra solo velas válidas
+  const validOHLC = ohlcData.filter(c =>
+    typeof c.alto === "number" &&
+    typeof c.bajo === "number" &&
+    typeof c.cierre === "number" &&
+    typeof c.volumen === "number"
+  );
+
   let totalVolume = 0;
   let totalPV = 0;
 
-  ohlcData.forEach(c => {
-    if (
-      typeof c.alto === "number" &&
-      typeof c.bajo === "number" &&
-      typeof c.cierre === "number" &&
-      typeof c.volumen === "number"
-    ) {
-      const typicalPrice = (c.alto + c.bajo + c.cierre) / 3;
-      totalPV += typicalPrice * c.volumen;
-      totalVolume += c.volumen;
-    }
+  validOHLC.forEach(c => {
+    const typicalPrice = (c.alto + c.bajo + c.cierre) / 3;
+    totalPV += typicalPrice * c.volumen;
+    totalVolume += c.volumen;
   });
 
   if (totalVolume === 0) return null;
+
   return parseFloat((totalPV / totalVolume).toFixed(2));
 }
 
@@ -150,18 +152,24 @@ function calcularATR(ohlcData, period = 14) {
     const prevClose = ohlcData[i - 1].cierre;
 
     if (
-      typeof high === 'number' &&
-      typeof low === 'number' &&
-      typeof prevClose === 'number'
+      typeof high === "number" &&
+      typeof low === "number" &&
+      typeof prevClose === "number"
     ) {
-      const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+      const tr = Math.max(
+        high - low,
+        Math.abs(high - prevClose),
+        Math.abs(low - prevClose)
+      );
       trs.push(tr);
     }
   }
 
-  if (trs.length === 0) return null;
+  if (trs.length < period) return null;
 
-  const atr = trs.slice(-period).reduce((a, b) => a + b, 0) / period;
+  const atr =
+    trs.slice(-period).reduce((sum, tr) => sum + tr, 0) / period;
+
   return parseFloat(atr.toFixed(2));
 }
 
