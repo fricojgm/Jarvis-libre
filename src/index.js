@@ -289,17 +289,16 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
         VWAP: vwap,
         ATR: atr,
         ADX: adx,
+        BollingerBands: {
+          superior: bollinger.superior,
+          inferior: bollinger.inferior
+         },
         fundamentales: {
           marketCap: marketCap,
           eps: eps,
           peRatio: peRatio
-          
-         }
-        BollingerBands: {
-          superior: bollinger.superior,
-          inferior: bollinger.inferior
-         }
-        },
+          },
+        
         patron,
         tecnicoCombo,
         ultimaVela: {
