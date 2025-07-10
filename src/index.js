@@ -243,7 +243,7 @@ module.exports = {
 app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
   const symbol = ticker;
-  const macd = await obtenerMACDPolygon(symbol);
+  const macd = await obtenerMACDPolygon(ticker);
 
   try {
     const response = await axios.get(`https://jarvis-libre.onrender.com/reporte-mercado/${ticker}`);
