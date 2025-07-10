@@ -204,8 +204,16 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   try {
     const ohlc = await obtenerOHLC(ticker);
     console.log( 'OHLC data:', ohlc);
+    const ultimaVela = ohlc[ohlc.length - 1]; // última vela disponible
+
+    const precioActual = ultimaVela?.cierre ?? 'No disponible';
+    const apertura = ultimaVela?.apertura ?? 'No disponible';
+    const alto = ultimaVela?.alto ?? 'No disponible';
+    const bajo = ultimaVela?.bajo ?? 'No disponible';
+    const volumen = ultimaVela?.volumen ?? 'No disponible';
+    const fecha = ultimaVela?.fecha ?? 'No disponible';
+
     const precios = ohlc.map(c => c.cierre);
-    const precioActual = ohlc[ohlc.lenght -1]?.cierre || 'No dispoble';
     const rsi = precios.length >= 15 ? calcularRSI(precios) : 'No disponible';
     const macd = precios.length >= 26 ? calcularMACD(precios) : 'No disponible';
     const mfi = calcularMFI(ohlc);
