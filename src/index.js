@@ -237,22 +237,7 @@ function calcularVolumenAcumulado(ohlc) {
 }
 
 
-  const ema12 = ema(cierres, 12);
-  const ema26 = ema(cierres, 26);
-  const macdLine = ema12.slice(-ema26.length).map((v, i) => v - ema26[i]);
-  const signalLine = ema(macdLine, 9);
-  const macdFinal = macdLine[macdLine.length - 1];
-  const signalFinal = signalLine[signalLine.length - 1];
-  const histogram = macdFinal - signalFinal;
-
-  return {
-    macd: parseFloat(macdFinal.toFixed(2)),
-    signal: parseFloat(signalFinal.toFixed(2)),
-    histogram: parseFloat(histogram.toFixed(2))
-  };
-
-
-
+  
 app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
 
