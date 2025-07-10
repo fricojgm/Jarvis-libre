@@ -290,7 +290,6 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
       BollingerBands: {
           superior: bollinger.superior,
           inferior: bollinger.inferior
-         }
          },
         
         patron,
