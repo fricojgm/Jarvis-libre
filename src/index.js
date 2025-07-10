@@ -72,33 +72,7 @@ async function obtenerOHLC(ticker) {
 }
 
  
-  try {
-    const url = `https://api.polygon.io/v1/indicators/macd/${symbol}?timespan=day&adjusted=true&short_window=12&long_window=26&signal_window=9&series_type=close&order=desc&limit=1&apiKey=PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V`;
-    
-
-    if (response.data && response.data.results && response.data.results.values.length > 0) {
-      const ultimo = response.data.results.values[0];
-      return {
-        macd: parseFloat(ultimo.macd).toFixed(2),
-        signal: parseFloat(ultimo.signal).toFixed(2),
-        histogram: parseFloat(ultimo.histogram).toFixed(2)
-      };
-    } else {
-      return {
-        macd: "N/A",
-        signal: "N/A",
-        histogram: "N/A"
-      };
-    }
-
-  } catch (error) {
-    console.error("Error obteniendo MACD desde Polygon:", error.message);
-    return {
-      macd: "N/A",
-      signal: "N/A",
-      histogram: "N/A"
-    };
-  }
+ 
 
 
 async function obtenerShortInterest(ticker) {
