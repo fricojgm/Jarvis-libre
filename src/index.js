@@ -71,6 +71,36 @@ async function obtenerOHLC(ticker) {
 })).reverse();
 }
 
+async function obtenerMACDPolygon(symbol) {
+  try {
+    const url = `https://api.polygon.io/v1/indicators/macd/${symbol}?timespan=day&adjusted=true&short_window=12&long_window=26&signal_window=9&series_type=close&order=desc&limit=1&apiKey=PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V`;
+    const response = await axios.get(url);
+
+    if (response.data && response.data.results && response.data.results.values.length > 0) {
+      const ultimo = response.data.results.values[0];
+      return {
+        macd: parseFloat(ultimo.macd).toFixed(2),
+        signal: parseFloat(ultimo.signal).toFixed(2),
+        histogram: parseFloat(ultimo.histogram).toFixed(2)
+      };
+    } else {
+      return {
+        macd: "N/A",
+        signal: "N/A",
+        histogram: "N/A"
+      };
+    }
+
+  } catch (error) {
+    console.error("Error obteniendo MACD desde Polygon:", error.message);
+    return {
+      macd: "N/A",
+      signal: "N/A",
+      histogram: "N/A"
+    };
+  }
+}
+
 async function obtenerShortInterest(ticker) {
   try {
     const response = await axios.get(`https://api.polygon.io/v3/reference/shorts?ticker=${ticker}&apiKey=${POLYGON_API_KEY}`);
@@ -206,17 +236,6 @@ function calcularVolumenAcumulado(ohlc) {
   return ohlc.reduce((acc, c) => acc + c.volumen, 0).toFixed(2);
 }
 
-function calcularMACD(ohlcData) {
-  const cierres = ohlcData.map(c => c.cierre);
-
-  const ema = (datos, periodo) => {
-    const k = 2 / (periodo + 1);
-    let emaArray = [datos.slice(0, periodo).reduce((a, b) => a + b) / periodo];
-    for (let i = periodo; i < datos.length; i++) {
-      emaArray.push((datos[i] - emaArray[emaArray.length - 1]) * k + emaArray[emaArray.length - 1]);
-    }
-    return emaArray;
-  };
 
   const ema12 = ema(cierres, 12);
   const ema26 = ema(cierres, 26);
@@ -252,7 +271,8 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
     const precioActual = ohlc.length > 0 ? ohlc[ohlc.length - 1].cierre : 'No disponible';
     const precios = ohlc.map(c => c.cierre);
     const rsi = precios.length >= 15 ? calcularRSI(precios) : 'No disponible';
-    const macd = precios.length >= 26 ? calcularMACD(precios) : 'No disponible';
+    const macdData = await obtenerMACDPolygon(symbol);
+    const macd = macdData.macd;
     const mfi = calcularMFI(ohlc);
     const vwap = calcularVWAP(ohlc);
     const atr = calcularATR(ohlc);
