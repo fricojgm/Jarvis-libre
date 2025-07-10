@@ -186,16 +186,7 @@ function calcularADX(ohlc) {
   if (ohlc.length < 14) return "N/A";
   return (Math.random() * 50 + 10).toFixed(2); // Placeholder
 }
-  const avgTR = trs.slice(-period).reduce((a, b) => a + b, 0) / period;
-  const avgPlusDM = plusDM.slice(-period).reduce((a, b) => a + b, 0) / period;
-  const avgMinusDM = minusDM.slice(-period).reduce((a, b) => a + b, 0) / period;
-
-  const plusDI = (avgPlusDM / avgTR) * 100;
-  const minusDI = (avgMinusDM / avgTR) * 100;
-  const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
-
-  return parseFloat(dx.toFixed(2));
-  }
+  
 
 function calcularMoneyFlowIndex(ohlc) {
   if (ohlc.length < 15) return "N/A";
