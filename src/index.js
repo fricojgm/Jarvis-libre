@@ -150,20 +150,16 @@ function calcularATR(ohlcData, period = 14) {
     const prevClose = ohlcData[i - 1].cierre;
 
     if (
-      typeof high === "number" &&
-      typeof low === "number" &&
-      typeof prevClose === "number"
+      typeof high === 'number' &&
+      typeof low === 'number' &&
+      typeof prevClose === 'number'
     ) {
-      const tr = Math.max(
-        high - low,
-        Math.abs(high - prevClose),
-        Math.abs(low - prevClose)
-      );
+      const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
       trs.push(tr);
     }
   }
 
-  if (trs.length < period) return null;
+  if (trs.length === 0) return null;
 
   const atr = trs.slice(-period).reduce((a, b) => a + b, 0) / period;
   return parseFloat(atr.toFixed(2));
