@@ -1,3 +1,4 @@
+const { obtenerMACDPolygon } = require('./analizador');
 const express = require('express');
 const axios = require('axios');
 let horaNY = null;
@@ -236,7 +237,9 @@ function calcularVolumenAcumulado(ohlc) {
   return ohlc.reduce((acc, c) => acc + c.volumen, 0).toFixed(2);
 }
 
-
+module.exports = {
+  obtenerMACDPolygon
+};
   
 app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
