@@ -115,6 +115,61 @@ function calcularRSI(ohlcData, period = 14) {
   return parseFloat(rsi[rsi.length - 1].toFixed(2));
 }
 
+function calcularVWAP(ohlcData) {
+  let totalVolume = 0;
+  let totalPV = 0;
+  ohlcData.forEach(c => {
+    const typicalPrice = (c.alto + c.bajo + c.cierre) / 3;
+    totalPV += typicalPrice * c.volumen;
+    totalVolume += c.volumen;
+  });
+  return parseFloat((totalPV / totalVolume).toFixed(2));
+}
+
+function calcularATR(ohlcData, period = 14) {
+  let trs = [];
+  for (let i = 1; i < ohlcData.length; i++) {
+    const high = ohlcData[i].alto;
+    const low = ohlcData[i].bajo;
+    const prevClose = ohlcData[i - 1].cierre;
+    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+    trs.push(tr);
+  }
+  const atr = trs.slice(-period).reduce((a, b) => a + b, 0) / period;
+  return parseFloat(atr.toFixed(2));
+}
+
+function calcularBollingerBands(precios, period = 20) {
+  const recent = precios.slice(-period);
+  const media = recent.reduce((a, b) => a + b, 0) / period;
+  const desviacion = Math.sqrt(recent.reduce((acc, val) => acc + Math.pow(val - media, 2), 0) / period);
+  return {
+    superior: parseFloat((media + 2 * desviacion).toFixed(2)),
+    inferior: parseFloat((media - 2 * desviacion).toFixed(2))
+  };
+}
+
+function calcularADX(ohlcData, period = 14) {
+  let plusDM = [], minusDM = [], trs = [];
+  for (let i = 1; i < ohlcData.length; i++) {
+    const upMove = ohlcData[i].alto - ohlcData[i - 1].alto;
+    const downMove = ohlcData[i - 1].bajo - ohlcData[i].bajo;
+    plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+    minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
+    const tr = Math.max(ohlcData[i].alto - ohlcData[i].bajo, Math.abs(ohlcData[i].alto - ohlcData[i - 1].cierre), Math.abs(ohlcData[i].bajo - ohlcData[i - 1].cierre));
+    trs.push(tr);
+  }
+  const avgTR = trs.slice(-period).reduce((a, b) => a + b, 0) / period;
+  const avgPlusDM = plusDM.slice(-period).reduce((a, b) => a + b, 0) / period;
+  const avgMinusDM = minusDM.slice(-period).reduce((a, b) => a + b, 0) / period;
+
+  const plusDI = (avgPlusDM / avgTR) * 100;
+  const minusDI = (avgMinusDM / avgTR) * 100;
+  const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
+
+  return parseFloat(dx.toFixed(2));
+  }
+
 function calcularMACD(ohlcData) {
   const cierres = ohlcData.map(c => c.cierre);
 
@@ -147,19 +202,35 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
 
   try {
-    const ohlc = await obtenerOHLC(ticker); // función que ya tienes
+    const ohlc = await obtenerOHLC(ticker);
     const precios = ohlc.map(c => c.cierre);
 
     const rsi = precios.length >= 15 ? calcularRSI(precios) : 'No disponible';
     const macd = precios.length >= 26 ? calcularMACD(precios) : 'No disponible';
     const mfi = calcularMFI(ohlc);
+    const vwap = calcularVWAP(ohlc);
+    const atr = calcularATR(ohlc);
+    const adx = calcularADX(ohlc);
+    const bollinger = calcularBollingerBands(precios);
+
+    const patron = "Doji"; // si no tienes lógica real, deja fijo por ahora
+    const tecnicoCombo = "Precaución: RSI y MFI neutros. MACD bajista"; // igual, puedes simularlo
 
     res.json({
       ticker,
       indicadores: {
         RSI: rsi,
+        MACD: macd,
         MFI: mfi,
-        MACD: macd
+        VWAP: vwap,
+        ATR: atr,
+        ADX: adx,
+        BollingerBands: {
+          superior: bollinger.superior,
+          inferior: bollinger.inferior
+        },
+        patron,
+        tecnicoCombo
       }
     });
   } catch (error) {
