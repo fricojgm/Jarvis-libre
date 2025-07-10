@@ -408,7 +408,7 @@ if (horaNY < apertura) {
         res.json({
             symbol, timeframe,
             precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
-            historico: Array.isArray(precios) && precios.length >= 14 ? precios.slice(-14) : [],,
+            historico: Array.isArray(precios) && precios.length >= 14 ? precios.slice(-14) : [],
             rsi, macd, patron, atr, adx, vwap,
             bollingerBands: bb,
             velas: {
