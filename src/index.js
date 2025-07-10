@@ -150,9 +150,9 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
     const ohlc = await obtenerOHLC(ticker); // función que ya tienes
     const precios = ohlc.map(c => c.cierre);
 
-    const rsi = calcularRSI(ohlc);
+    const rsi = precios.length >= 15 ? calcularRSI(precios) : 'No disponible';
+    const macd = precios.length >= 26 ? calcularMACD(precios) : 'No disponible';
     const mfi = calcularMFI(ohlc);
-    const macd = calcularMACD(ohlc);
 
     res.json({
       ticker,
