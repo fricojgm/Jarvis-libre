@@ -41,29 +41,34 @@ app.get('/debug-hora', async (req, res) => {
 
 
 async function obtenerOHLC(ticker) {
-    const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V'; // Tu clave real
+  const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V'; // Tu clave real
 
-    const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/prev?adjusted=true&apiKey=${apiKey}`;
+  // Calcula el rango de fechas: desde hace 25 días hasta hoy
+  const hoyObj = new Date();
+  const inicioObj = new Date();
+  inicioObj.setDate(hoyObj.getDate() - 25);
+  const hoy = hoyObj.toISOString().split('T')[0];
+  const inicio = inicioObj.toISOString().split('T')[0];
 
-    console.log("URL solicitada:", url);
+  // Construye la URL para traer velas diarias (1/day)
+  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${inicio}/${hoy}?adjusted=true&sort=asc&apiKey=${apiKey}`;
+  console.log("URL solicitada:", url);
 
-    const res = await axios.get(url);
+  const res = await axios.get(url);
 
-    if (!res.data.results || res.data.results.length === 0) {
-        throw new Error('No se encontraron velas OHLC');
-    }
+  if (!res.data.results || res.data.results.length === 0) {
+    throw new Error('No se encontraron velas OHLC');
+  }
 
-    // Formato único (una sola vela)
-    const candle = res.data.results[0];
-
-    return [{
-        apertura: candle.o,
-        alto: candle.h,
-        bajo: candle.l,
-        cierre: candle.c,
-        volumen: candle.v,
-        fecha: candle.t
-    }];
+  // Devuelve todas las velas en formato usable
+  return res.data.results.map(candle => ({
+    apertura: candle.o,
+    alto: candle.h,
+    bajo: candle.l,
+    cierre: candle.c,
+    volumen: candle.v,
+    fecha: candle.t
+  }));
 }
 
 function calcularMFI(ohlcData) {
@@ -238,7 +243,15 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
           inferior: bollinger.inferior
         },
         patron,
-        tecnicoCombo
+        tecnicoCombo,
+        ultimaVela: {
+  apertura: ultimaVela.apertura,
+  alto: ultimaVela.alto,
+  bajo: ultimaVela.bajo,
+  cierre: ultimaVela.cierre,
+  volumen: ultimaVela.volumen,
+  fecha: ultimaVela.fecha
+}
       }
     });
   } catch (error) {
