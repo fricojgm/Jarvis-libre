@@ -71,6 +71,20 @@ async function obtenerOHLC(ticker) {
 })).reverse();
 }
 
+async function obtenerShortInterest(ticker) {
+  try {
+    const response = await axios.get(`https://api.polygon.io/v3/reference/shorts?ticker=${ticker}&apiKey=${POLYGON_API_KEY}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener Short Interest:', error.message);
+    return {
+      short_volume: 'No disponible',
+      short_percent: 'No disponible',
+      days_to_cover: 'No disponible'
+    };
+  }
+}
+
 function obtenerHoraNuevaYork() {
   const nyTime = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
   return new Date(nyTime).toISOString().split("T")[1].split(".")[0]; // solo la hora
@@ -308,11 +322,11 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
       
   },
   shortInterest: {
-    shortVolume: json.shortVolume.shortVolume,
-    shortVolumeRatio: json.shortVolume.shortVolumeRatio,
-    totalVolume: json.shortVolume.totalVolume,
-    daysToCover: json.daysToCover
-  },
+  shortVolume: shortVolume?.results?.short_volume ?? 'No disponible',
+  shortVolumeRatio: shortVolume?.results?.short_percent_of_float ?? 'No disponible',
+  totalVolume: shortVolume?.results?.total_volume ?? 'No disponible',
+  daysToCover: shortVolume?.results?.days_to_cover ?? 'No disponible'
+},
   resumenTecnico: {
     estadoActual: tecnicoCombo.includes("Comprar") ? "Comprar" : "Precaución",
     riesgo: parseFloat(rsi) > 75 ? "Alto" : "Medio",
