@@ -229,7 +229,6 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
     const precioActual = ohlc.length > 0 ? ohlc[ohlc.length - 1].cierre : 'No disponible';
     const precios = ohlc.map(c => c.cierre);
     const rsi = precios.length >= 15 ? calcularRSI(precios) : 'No disponible';
-    const macd = macdData.macd;
     const mfi = calcularMFI(ohlc);
     const vwap = calcularVWAP(ohlc);
     const atr = calcularATR(ohlc);
