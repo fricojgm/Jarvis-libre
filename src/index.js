@@ -150,44 +150,49 @@ function calcularRSI(ohlcData, period = 14) {
 }
 
 function calcularVWAP(ohlc) {
-  if (!ohlc || ohlc.length === 0) return "No disponible";
+    let totalVolume = 0;
+    let totalTPV = 0;
 
-  let totalPV = 0;
-  let totalVol = 0;
+    for (const candle of ohlc) {
+        const alto = Number(candle.alto);
+        const bajo = Number(candle.bajo);
+        const cierre = Number(candle.cierre);
+        const volumen = Number(candle.volumen);
 
-  ohlc.forEach(candle => {
-    const typicalPrice = (candle.alto + candle.bajo + candle.cierre) / 3;
-    totalPV += typicalPrice * candle.volumen;
-    totalVol += candle.volumen;
-  });
+        if (isNaN(alto) || isNaN(bajo) || isNaN(cierre) || isNaN(volumen)) continue;
 
-  if (totalVol === 0) return "No disponible";
+        const typicalPrice = (alto + bajo + cierre) / 3;
+        totalTPV += typicalPrice * volumen;
+        totalVolume += volumen;
+    }
 
-  const vwap = totalPV / totalVol;
-  return vwap.toFixed(2);
+    if (totalVolume === 0) return 'No disponible';
+    return (totalTPV / totalVolume).toFixed(2);
 }
 
 function calcularATR(ohlc) {
-  if (!ohlc || ohlc.length < 2) return "No disponible";
+    let sum = 0;
+    let count = 0;
 
-  const trArray = [];
+    for (let i = 1; i < ohlc.length; i++) {
+        const high = Number(ohlc[i].alto);
+        const low = Number(ohlc[i].bajo);
+        const prevClose = Number(ohlc[i - 1].cierre);
 
-  for (let i = 1; i < ohlc.length; i++) {
-    const prev = ohlc[i - 1];
-    const curr = ohlc[i];
+        if (isNaN(high) || isNaN(low) || isNaN(prevClose)) continue;
 
-    const highLow = curr.alto - curr.bajo;
-    const highClose = Math.abs(curr.alto - prev.cierre);
-    const lowClose = Math.abs(curr.bajo - prev.cierre);
+        const tr = Math.max(
+            high - low,
+            Math.abs(high - prevClose),
+            Math.abs(low - prevClose)
+        );
+        sum += tr;
+        count++;
+    }
 
-    const trueRange = Math.max(highLow, highClose, lowClose);
-    trArray.push(trueRange);
-  }
-
-  const atr = trArray.reduce((acc, val) => acc + val, 0) / trArray.length;
-  return atr.toFixed(2);
+    if (count === 0) return 'No disponible';
+    return (sum / count).toFixed(2);
 }
-
 function calcularBollingerBands(precios, period = 20) {
   const recent = precios.slice(-period);
   const media = recent.reduce((a, b) => a + b, 0) / period;
