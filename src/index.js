@@ -63,28 +63,34 @@ async function obtenerPrecioTiempoReal(symbol) {
 }
 
 async function obtenerFundamentales(symbol, precioRealVivo) {
-    try {
-        const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`;
-        const res = await axios.get(url);
-        const d = res.data.results?.[0] || {};
+  try {
+    const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${POLYGON_API_KEY}`;
+    const res = await axios.get(url);
+    const d = res.data.results?.[0] || {};
 
-        const dilutedShares = d.financials?.income_statement?.diluted_average_shares?.value;
-        const eps = d.financials?.income_statement?.basic_earnings_per_share?.value;
+    const dilutedShares = d.financials?.income_statement?.diluted_average_shares?.value;
+    const eps = d.financials?.income_statement?.basic_earnings_per_share?.value;
+    const dividendYield = d.financials?.income_statement?.dividends_yield?.value;
 
-        return {
-            marketCap: (dilutedShares && precioRealVivo) ? (dilutedShares * precioRealVivo) : "N/A",
-            eps: eps || "N/A",
-            peRatio: (eps && precioRealVivo) ? (precioRealVivo / eps) : "N/A"
-        };
+    const marketCap = dilutedShares && precioRealVivo ? dilutedShares * precioRealVivo : "N/A";
+    const peRatio = eps && precioRealVivo ? precioRealVivo / eps : "N/A";
 
-    } catch (err) {
-        console.error(`Error Fundamentales ${symbol}:`, err.message);
-        return {
-            marketCap: "N/A",
-            eps: "N/A",
-            peRatio: "N/A"
-        };
-    }
+    return {
+      marketCap,
+      eps: eps || "N/A",
+      peRatio,
+      dividendYield: dividendYield || "N/A"
+    };
+
+  } catch (err) {
+    console.error(`Error obteniendo Fundamentales de ${symbol}:`, err.message);
+    return {
+      marketCap: "N/A",
+      eps: "N/A",
+      peRatio: "N/A",
+      dividendYield: "N/A"
+    };
+  }
 }
 
 async function obtenerShortData(symbol) {
@@ -402,7 +408,7 @@ if (horaNY < apertura) {
         res.json({
             symbol, timeframe,
             precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
-            historico: precios.slice(-cantidad),
+            historico: Array.isArray(precios) && precios.length >= 14 ? precios.slice(-14) : [],,
             rsi, macd, patron, atr, adx, vwap,
             bollingerBands: bb,
             velas: {
@@ -412,10 +418,12 @@ if (horaNY < apertura) {
                 hora: velas.hora
             },
 
-           fundamentales: {
+           fundamental: {
                marketCap: fundamentales.marketCap,
-               eps: fundamentales.eps,
                peRatio: fundamentales.peRatio
+               eps: fundamentales.eps,
+               dividenYield: fundamentales.dividenYield
+               
            },
 
            shortInterest: {
