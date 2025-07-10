@@ -1,4 +1,30 @@
 const express = require('express');
+app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
+  const { ticker } = req.params;
+
+  try {
+    const ohlc = await obtenerOHLC(ticker); // función que debes tener
+    const precios = ohlc.map(c => c.cierre);
+
+    const rsi = calcularRSI(precios);
+    const macd = calcularMACD(precios);
+    const atr = calcularATR(ohlc);
+    const adx = calcularADX(ohlc);
+    const vwap = calcularVWAP(ohlc);
+    const mfi = calcularMFI(ohlc);
+    const bb = calcularBollingerBands(precios);
+    const patron = detectarPatronVelas(ohlc);
+    const tecnicoCombo = analisisCombinado(rsi, macd, patron, mfi);
+
+    res.json({
+      rsi, macd, atr, adx, vwap, mfi, bollingerBands: bb, patron, tecnicoCombo
+    });
+
+  } catch (err) {
+    console.error(`Error técnicos ${ticker}:`, err.message);
+    res.status(500).json({ error: 'Error calculando técnicos' });
+  }
+});
 const axios = require('axios');
 let horaNY = null;
 const ZONA_NY = 'America/New_York';
