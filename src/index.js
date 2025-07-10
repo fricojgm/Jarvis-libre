@@ -1,4 +1,11 @@
 const express = require('express');
+const axios = require('axios');
+const app = express();
+let horaNY = null;
+const ZONA_NY = 'America/New_York';
+const INTERVALO_HORA = process.env.INTERVALO_TIEMPO_NY ? parseInt(process.env.INTERVALO_TIEMPO_NY) : 30 * 60 * 1000;// Consulta la hora oficial de NY cada 12 horas
+
+
 app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   const { ticker } = req.params;
 
@@ -25,10 +32,6 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
     res.status(500).json({ error: 'Error calculando técnicos' });
   }
 });
-const axios = require('axios');
-let horaNY = null;
-const ZONA_NY = 'America/New_York';
-const INTERVALO_HORA = process.env.INTERVALO_TIEMPO_NY ? parseInt(process.env.INTERVALO_TIEMPO_NY) : 30 * 60 * 1000;// Consulta la hora oficial de NY cada 12 horas
 
 async function sincronizarHoraNY() {
     try {
