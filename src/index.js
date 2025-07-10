@@ -39,6 +39,32 @@ app.get('/debug-hora', async (req, res) => {
     }
 });
 
+const axios = require('axios');
+
+async function obtenerOHLC(ticker) {
+  const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V'; // Tu clave real
+  const hoy = new Date().toISOString().split('T')[0]; // fecha de hoy
+  const inicio = '2024-06-01'; // puedes ajustar
+
+  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/30/${inicio}/${hoy}?adjusted=true&sort=asc&apiKey=${apiKey}`;
+
+  const res = await axios.get(url);
+
+  if (!res.data.results || res.data.results.length === 0) {
+    throw new Error('No se encontraron velas OHLC');
+  }
+
+  // Mapeo a formato usable
+  return res.data.results.map(candle => ({
+    apertura: candle.o,
+    alto: candle.h,
+    bajo: candle.l,
+    cierre: candle.c,
+    volumen: candle.v,
+    fecha: candle.t
+  }));
+}
+
 app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   const { ticker } = req.params;
 
