@@ -302,7 +302,6 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   fecha: ultimaVela.fecha,
  },
   horaNY,
-  horaLocal,
   mercado: {
      estado: estadoMercado
    }
