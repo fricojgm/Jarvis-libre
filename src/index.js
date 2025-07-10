@@ -72,7 +72,7 @@ async function obtenerOHLC(ticker) {
 })).reverse();
 }
 
-async function obtenerMACDPolygon(symbol) {
+ 
   try {
     const url = `https://api.polygon.io/v1/indicators/macd/${symbol}?timespan=day&adjusted=true&short_window=12&long_window=26&signal_window=9&series_type=close&order=desc&limit=1&apiKey=PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V`;
     const response = await axios.get(url);
