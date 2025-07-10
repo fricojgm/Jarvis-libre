@@ -71,6 +71,21 @@ async function obtenerOHLC(ticker) {
 })).reverse();
 }
 
+function obtenerHoraNuevaYork() {
+  const nyTime = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+  return new Date(nyTime).toISOString().split("T")[1].split(".")[0]; // solo la hora
+}
+
+function obtenerEstadoMercado(horaNY) {
+  const [hora, minuto] = horaNY.split(":").map(Number);
+  const minutosTotales = hora * 60 + minuto;
+
+  if (minutosTotales >= 570 && minutosTotales < 960) return "Abierto";        // 9:30 AM - 4:00 PM
+  if (minutosTotales >= 540 && minutosTotales < 570) return "Pre-market";    // 9:00 AM - 9:30 AM
+  if (minutosTotales >= 960 && minutosTotales <= 1020) return "Post-market"; // 4:00 PM - 5:00 PM
+  return "Cerrado";
+}
+
 function calcularMFI(ohlcData) {
     const period = 14;
     const typicalPrices = ohlcData.map(c => (c.alto + c.bajo + c.cierre) / 3);
@@ -256,6 +271,10 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
 
     const patron = "Doji"; // si no tienes lógica real, deja fijo por ahora
     const tecnicoCombo = "Precaución: RSI y MFI neutros. MACD bajista"; // igual, puedes simularlo
+    const horaNY = obtenerHoraNuevaYork();
+    const horaLocal = obtenerHoraLocal();
+    const estadoMercado = obtenerEstadoMercado(horaNY);
+
 
     res.json({
       ticker,
@@ -279,8 +298,13 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   bajo: ultimaVela.bajo,
   cierre: ultimaVela.cierre,
   volumen: ultimaVela.volumen,
-  fecha: ultimaVela.fecha
+  fecha: ultimaVela.fecha,
+  horaNY,
+  horaLocal,
+  mercado: {
+  estado: estadoMercado
 }
+
       }
     });
   } catch (error) {
