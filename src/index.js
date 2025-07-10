@@ -236,14 +236,10 @@ function calcularVolumenAcumulado(ohlc) {
   return ohlc.reduce((acc, c) => acc + c.volumen, 0).toFixed(2);
 }
 
-module.exports = {
-  obtenerMACDPolygon
-};
-  
 app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
   const symbol = ticker;
-  const macd = await obtenerMACDPolygon(ticker);
+  
 
   try {
     const response = await axios.get(`https://jarvis-libre.onrender.com/reporte-mercado/${ticker}`);
@@ -252,7 +248,6 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
     const shortVolume = await obtenerShortInterest(ticker);
     console.log( 'OHLC data:', ohlc);
     const ultimaVela = ohlc[ohlc.length - 1]; // última vela disponible
-    const macdData = await obtenerMACDPolygon(ticker);
     const alto = ultimaVela?.alto ?? 'No disponible';
     const bajo = ultimaVela?.bajo ?? 'No disponible';
     const volumen = ultimaVela?.volumen ?? 'No disponible';
@@ -277,7 +272,6 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
       ticker,
       precioActual,
       RSI: rsi,
-      MACD: macd,
       MFI: mfi,
       VWAP: vwap,
       ATR: atr,
