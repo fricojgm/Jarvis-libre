@@ -250,7 +250,7 @@ function calcularVolumenAcumulado(ohlc) {
     signal: parseFloat(signalFinal.toFixed(2)),
     histogram: parseFloat(histogram.toFixed(2))
   };
-}
+
 
 
 app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
