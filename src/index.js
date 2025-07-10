@@ -203,8 +203,9 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
 
   try {
     const ohlc = await obtenerOHLC(ticker);
+    console.log( 'OHLC data:', ohlc);
     const precios = ohlc.map(c => c.cierre);
-
+    const precioActual = ohlc[ohlc.lenght -1]?.cierre || 'No dispoble';
     const rsi = precios.length >= 15 ? calcularRSI(precios) : 'No disponible';
     const macd = precios.length >= 26 ? calcularMACD(precios) : 'No disponible';
     const mfi = calcularMFI(ohlc);
@@ -218,6 +219,7 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
 
     res.json({
       ticker,
+      precioActual,
       indicadores: {
         RSI: rsi,
         MACD: macd,
