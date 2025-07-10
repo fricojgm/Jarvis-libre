@@ -267,6 +267,10 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
     const vwap = calcularVWAP(ohlc);
     const atr = calcularATR(ohlc);
     const adx = calcularADX(ohlc);
+    const marketCap = json.marketCap;
+    const eps = json.eps;
+    const peRatio = json.peRatio;
+    const dividenYield = json.dividenYield;
     const bollinger = calcularBollingerBands(precios);
 
     const patron = "Doji"; // si no tienes lógica real, deja fijo por ahora
@@ -285,6 +289,12 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
         VWAP: vwap,
         ATR: atr,
         ADX: adx,
+        fundamentales: {
+          marketCap: marketCap,
+          eps: eps,
+          peRatio: peRatio
+          dividenYield: dividenYield
+         }
         BollingerBands: {
           superior: bollinger.superior,
           inferior: bollinger.inferior
@@ -304,7 +314,25 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   mercado: {
      estado: estadoMercado
    }
- });
+ fundamentales: {
+    marketCap: json.fundamental.marketCap,
+    eps: json.fundamental.eps,
+    peRatio: json.fundamental.peRatio,
+    dividendYield: dividendYield || null
+  },
+  shortInterest: {
+    shortVolume: json.shortVolume.shortVolume,
+    shortVolumeRatio: json.shortVolume.shortVolumeRatio,
+    totalVolume: json.shortVolume.totalVolume,
+    daysToCover: json.daysToCover
+  },
+  resumenTecnico: {
+    estadoActual: tecnicoCombo.includes("Comprar") ? "Comprar" : "Precaución",
+    riesgo: parseFloat(json.indicadores.RSI) > 75 ? "Alto" : "Medio",
+    oportunidad: `RSI ${json.indicadores.RSI}, Bollinger Inferior ${json.indicadores.BollingerBands.inferior}`
+  },
+  noticias: json.noticias || []
+});
 
     
   } catch (error) {
