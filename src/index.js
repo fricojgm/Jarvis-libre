@@ -206,7 +206,6 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
     console.log( 'OHLC data:', ohlc);
     const ultimaVela = ohlc[ohlc.length - 1]; // última vela disponible
 
-    const precioActual = ultimaVela?.cierre ?? 'No disponible';
     const alto = ultimaVela?.alto ?? 'No disponible';
     const bajo = ultimaVela?.bajo ?? 'No disponible';
     const volumen = ultimaVela?.volumen ?? 'No disponible';
