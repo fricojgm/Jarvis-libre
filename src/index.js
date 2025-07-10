@@ -41,29 +41,29 @@ app.get('/debug-hora', async (req, res) => {
 
 
 async function obtenerOHLC(ticker) {
-  const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V'; // Tu clave real
-  const hoyObj = new Date();
-  hoyObj.setDate(hoyObj.getDate() - 1); // Resta un día
-  const hoy = hoyObj.toISOString().split('T')[0];
-  const inicio = '2024-06-01'; // puedes ajustar
+    const apiKey = 'PxOMBWjCFxSbfan_jH9LAkP4oA4Fy1J3V'; // Tu clave real
 
-  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${inicio}/${hoy}?adjusted=true&sort=asc&apiKey=${apiKey}`;
-  console.log("URL solicitada:", url);
-  const res = await axios.get(url);
+    const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/prev?adjusted=true&apiKey=${apiKey}`;
 
-  if (!res.data.results || res.data.results.length === 0) {
-    throw new Error('No se encontraron velas OHLC');
-  }
+    console.log("URL solicitada:", url);
 
-  // Mapeo a formato usable
-  return res.data.results.map(candle => ({
-    apertura: candle.o,
-    alto: candle.h,
-    bajo: candle.l,
-    cierre: candle.c,
-    volumen: candle.v,
-    fecha: candle.t
-  }));
+    const res = await axios.get(url);
+
+    if (!res.data.results || res.data.results.length === 0) {
+        throw new Error('No se encontraron velas OHLC');
+    }
+
+    // Formato único (una sola vela)
+    const candle = res.data.results[0];
+
+    return [{
+        apertura: candle.o,
+        alto: candle.h,
+        bajo: candle.l,
+        cierre: candle.c,
+        volumen: candle.v,
+        fecha: candle.t
+    }];
 }
 
 function calcularMFI(ohlcData) {
