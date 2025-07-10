@@ -39,7 +39,6 @@ app.get('/debug-hora', async (req, res) => {
     }
 });
 
-const axios = require('axios');
 
 async function obtenerOHLC(ticker) {
   const apiKey = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V'; // Tu clave real
