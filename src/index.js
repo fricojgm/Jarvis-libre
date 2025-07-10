@@ -292,12 +292,8 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
         BollingerBands: {
           superior: bollinger.superior,
           inferior: bollinger.inferior
+         }
          },
-        fundamentales: {
-          marketCap: marketCap,
-          eps: eps,
-          peRatio: peRatio
-          },
         
         patron,
         tecnicoCombo,
@@ -312,7 +308,7 @@ app.get('/reporte-mercado/:ticker/tecnicos', async (req, res) => {
   horaNY,
   mercado: {
      estado: estadoMercado
-   }
+   },
  fundamentales: {
     marketCap: json.fundamental.marketCap,
     eps: json.fundamental.eps,
