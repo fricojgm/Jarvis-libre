@@ -1,4 +1,3 @@
-const { obtenerMACDPolygon } = require('./analizador');
 const express = require('express');
 const axios = require('axios');
 let horaNY = null;
