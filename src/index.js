@@ -18,7 +18,7 @@ const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
   let { timeframe = 'day', cantidad = 100 } = req.query;
-  cantidad = Math.max(parseInt(cantidad), 30); // Forzar mínimo de 30
+  cantidad = Math.max(parseInt(cantidad), 30); // mínimo 30 velas
 
   try {
     const hoy = new Date();
@@ -41,6 +41,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const lows = datos.map(p => p.l);
     const volumes = datos.map(p => p.v);
 
+    // Indicadores técnicos
     const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
     const macdResult = MACD.calculate({
       values: closes,
@@ -75,6 +76,38 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       period: 14
     }).at(-1);
 
+    // VWAP real
+    const typicalPrices = datos.map(p => (p.h + p.l + p.c) / 3);
+    const totalVolume = volumes.reduce((a, b) => a + b, 0);
+    const vwap = typicalPrices
+      .map((tp, i) => tp * volumes[i])
+      .reduce((a, b) => a + b, 0) / totalVolume;
+
+    // Fundamentales reales desde Polygon
+    let fundamental = {
+      marketCap: "N/A",
+      peRatio: "N/A",
+      eps: "N/A",
+      dividendYield: "N/A"
+    };
+
+    try {
+      const fundamentalsUrl = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`;
+      const fundamentalsResp = await axios.get(fundamentalsUrl);
+      const result = fundamentalsResp.data.results?.[0]?.financials;
+
+      if (result) {
+        fundamental = {
+          marketCap: Number(result.balance_sheet?.assets?.value) || "N/A",
+          peRatio: Number(result.valuation_ratios?.price_to_earnings) || "N/A",
+          eps: Number(result.income_statement?.eps) || "N/A",
+          dividendYield: Number(result.valuation_ratios?.dividend_yield) || "N/A"
+        };
+      }
+    } catch (e) {
+      console.warn("Fundamentales no disponibles:", e.message);
+    }
+
     const precioActual = closes.at(-1);
 
     res.json({
@@ -89,7 +122,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         atr,
         patron: "Sin patrón",
         adx: adxResult?.adx || "N/A",
-        vwap: "N/A",
+        vwap,
         mfi,
         bollingerBands: {
           superior: bbResult?.upper || "N/A",
@@ -103,12 +136,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         entradaSugerida: "Esperar confirmación de ruptura"
       },
 
-      fundamental: {
-        marketCap: "N/A",
-        peRatio: "N/A",
-        eps: "N/A",
-        dividendYield: "N/A"
-      },
+      fundamental,
 
       shortInterest: {
         shortFloat: "N/A",
@@ -163,4 +191,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
 });
-
