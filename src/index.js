@@ -33,8 +33,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const highs = datos.map(p => p.h);
     const lows = datos.map(p => p.l);
     const volumes = datos.map(p => p.v);
+    const velaActual = datos.at(-1);
 
-    // Indicadores
     const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
     const macdResult = MACD.calculate({
       values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9,
@@ -48,10 +48,30 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const ema20 = EMA.calculate({ values: closes, period: 20 }).at(-1);
     const vwap = VWAP.calculate({ close: closes, high: highs, low: lows, volume: volumes }).at(-1);
 
-    // Última vela
-    const velaActual = datos.at(-1);
+    // Datos fundamentales reales desde Polygon
+    let fundamental = {
+      marketCap: "N/A",
+      peRatio: "N/A",
+      eps: "N/A",
+      dividendYield: "N/A"
+    };
 
-    // Velas agrupadas (solo OHLCV)
+    try {
+      const fundaRes = await axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`);
+      const resultado = fundaRes.data?.results?.[0];
+      if (resultado) {
+        fundamental = {
+          marketCap: resultado.market_cap || "N/A",
+          peRatio: resultado.pe_ratio || "N/A",
+          eps: resultado.eps || "N/A",
+          dividendYield: resultado.dividend_yield || "N/A"
+        };
+      }
+    } catch (err) {
+      console.warn("⚠️ Fallo obteniendo fundamentales:", err.message);
+    }
+
+    // Velas multiframe
     const velas = {
       day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
       week: [
@@ -61,7 +81,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
           l: Math.min(...lows),
           c: velaActual.c,
           v: volumes.reduce((a, b) => a + b, 0),
-          t: datos.at(0).t
+          t: datos[0].t
         }
       ],
       month: [
@@ -71,7 +91,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
           l: Math.min(...lows),
           c: velaActual.c,
           v: volumes.reduce((a, b) => a + b, 0),
-          t: datos.at(0).t
+          t: datos[0].t
         }
       ],
       hour: []
@@ -89,7 +109,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         fecha: n.published_utc,
         sentimiento: n.insights?.sentiment || "neutral"
       }));
-    } catch (e) {
+    } catch {
       noticias = [];
     }
 
@@ -118,12 +138,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         tendencia: closes.at(-1) > closes[0] ? "Alcista" : "Bajista",
         entradaSugerida: "Esperar confirmación"
       },
-      fundamental: {
-        marketCap: "N/A",
-        peRatio: "N/A",
-        eps: "N/A",
-        dividendYield: "N/A"
-      },
+      fundamental,
       shortInterest: {
         shortFloat: "N/A",
         shortVolume: "N/A",
@@ -172,3 +187,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor activo en http://localhost:${PORT}`);
 });
+
