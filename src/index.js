@@ -10,6 +10,32 @@ app.use(cors());
 
 const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
+// 🔍 Función para obtener fundamentos desde Polygon
+async function obtenerFundamentales(symbol, precioRealVivo) {
+  try {
+    const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`;
+    const res = await axios.get(url);
+    const d = res.data.results?.[0] || {};
+
+    const dilutedShares = d.financials?.income_statement?.diluted_average_shares?.value;
+    const eps = d.financials?.income_statement?.basic_earnings_per_share?.value;
+
+    return {
+      marketCap: (dilutedShares && precioRealVivo) ? (dilutedShares * precioRealVivo) : "N/A",
+      eps: eps || "N/A",
+      peRatio: (eps && precioRealVivo) ? (precioRealVivo / eps) : "N/A"
+    };
+
+  } catch (err) {
+    console.warn(`⚠️ Error al obtener fundamentales para ${symbol}:`, err.message);
+    return {
+      marketCap: "N/A",
+      eps: "N/A",
+      peRatio: "N/A"
+    };
+  }
+}
+
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
   const { timeframe = 'day', cantidad = 100 } = req.query;
@@ -33,9 +59,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const highs = datos.map(p => p.h);
     const lows = datos.map(p => p.l);
     const volumes = datos.map(p => p.v);
-    const velaActual = datos.at(-1);
 
-    // Indicadores técnicos
     const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
     const macdResult = MACD.calculate({
       values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9,
@@ -49,7 +73,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const ema20 = EMA.calculate({ values: closes, period: 20 }).at(-1);
     const vwap = VWAP.calculate({ close: closes, high: highs, low: lows, volume: volumes }).at(-1);
 
-    // Velas multiframe
+    const velaActual = datos.at(-1);
+
     const velas = {
       day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
       week: [
@@ -75,7 +100,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       hour: []
     };
 
-    // Noticias
     let noticias = [];
     try {
       const newsRes = await axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&sort=published_utc&order=desc&apiKey=${API_KEY}`);
@@ -91,46 +115,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       noticias = [];
     }
 
-    // Short Volume
-    let shortVolume = {};
-    try {
-      const sv = await axios.get(`https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&limit=1000&apiKey=${API_KEY}`);
-      const latestSV = sv.data.results?.filter(r => r.date)?.at(-1);
-      shortVolume = latestSV || {};
-    } catch (e) {
-      shortVolume = {};
-    }
-
-    // Short Interest
-    let shortInterest = {
-      shortFloat: "N/A",
-      shortVolume: "N/A",
-      shortVolumeRatio: "N/A",
-      totalVolume: "N/A",
-      shortInterestTotal: "N/A",
-      avgDailyVolume: "N/A",
-      daysToCover: "N/A"
-    };
-    try {
-      const si = await axios.get(`https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1100&sort=ticker.asc&apiKey=${API_KEY}`);
-      const lastSI = si.data.results?.filter(r => r.settlement_date)?.at(-1);
-      if (lastSI) {
-        shortInterest.shortInterestTotal = lastSI.short_interest;
-        shortInterest.avgDailyVolume = lastSI.avg_daily_volume;
-        shortInterest.daysToCover = lastSI.days_to_cover;
-      }
-    } catch (e) {
-      shortInterest = { ...shortInterest };
-    }
-
-    // Snapshot (último precio, VWAP, cambio %)
-    let snapshot = {};
-    try {
-      const snap = await axios.get(`https://api.polygon.io/v3/snapshot?ticker=${symbol}&apiKey=${API_KEY}`);
-      snapshot = snap.data.results?.[0]?.session || {};
-    } catch (e) {
-      snapshot = {};
-    }
+    const fundamental = await obtenerFundamentales(symbol, velaActual.c);
 
     res.json({
       symbol,
@@ -157,14 +142,16 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         tendencia: closes.at(-1) > closes[0] ? "Alcista" : "Bajista",
         entradaSugerida: "Esperar confirmación"
       },
-      fundamental: {
-        marketCap: "N/A",
-        peRatio: "N/A",
-        eps: "N/A",
-        dividendYield: "N/A"
+      fundamental,
+      shortInterest: {
+        shortFloat: "N/A",
+        shortVolume: "N/A",
+        shortVolumeRatio: "N/A",
+        totalVolume: "N/A",
+        shortInterestTotal: "N/A",
+        avgDailyVolume: "N/A",
+        daysToCover: "N/A"
       },
-      shortInterest,
-      shortVolume,
       volumen: {
         volumenActual: velaActual.v,
         volumenPromedio30Dias: (
@@ -181,7 +168,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       },
       velas,
       noticias,
-      snapshot,
       resumen: {
         estadoActual: "Precaución",
         riesgo: "Medio",
