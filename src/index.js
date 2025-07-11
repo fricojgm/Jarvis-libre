@@ -87,6 +87,15 @@ function mapTimeframeToAgg(timeframe) {
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
   let { timeframe = 'day', cantidad = 100 } = req.query;
+timeframe = {
+  diario: 'day',
+  diaria: 'day',
+  semanal: 'week',
+  mensual: 'month',
+  minuto: 'minute',
+  hora: 'hour',
+}[timeframe] || timeframe;
+
   cantidad = Math.max(parseInt(cantidad), 30);
 
   const { mult, timespan } = mapTimeframeToAgg(timeframe);
@@ -176,7 +185,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err.message);
+    console.error("ERROR COMPLETO:", err);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
