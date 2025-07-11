@@ -30,6 +30,61 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     }
 
     const closes = datos.map(p => p.c);
+const { RSI, MACD, ATR, BollingerBands, ADX, MFI } = require('technicalindicators');
+
+// ...
+
+// Extraer valores
+const closes = datos.map(p => p.c);
+const highs = datos.map(p => p.h);
+const lows = datos.map(p => p.l);
+const volumes = datos.map(p => p.v);
+
+// 1. RSI
+const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
+
+// 2. MACD
+const macdResult = MACD.calculate({
+  values: closes,
+  fastPeriod: 12,
+  slowPeriod: 26,
+  signalPeriod: 9,
+  SimpleMAOscillator: false,
+  SimpleMASignal: false
+}).at(-1);
+
+// 3. ATR
+const atr = ATR.calculate({
+  high: highs,
+  low: lows,
+  close: closes,
+  period: 14
+}).at(-1);
+
+// 4. Bollinger Bands
+const bbResult = BollingerBands.calculate({
+  period: 20,
+  stdDev: 2,
+  values: closes
+}).at(-1);
+
+// 5. ADX
+const adxResult = ADX.calculate({
+  close: closes,
+  high: highs,
+  low: lows,
+  period: 14
+}).at(-1);
+
+// 6. MFI
+const mfi = MFI.calculate({
+  high: highs,
+  low: lows,
+  close: closes,
+  volume: volumes,
+  period: 14
+}).at(-1);
+
     const highs = datos.map(p => p.h);
     const lows = datos.map(p => p.l);
     const volumes = datos.map(p => p.v);
@@ -63,23 +118,25 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       historico: closes.slice(-14),
 
       tecnico: {
-        rsi,
-        macd: macdResult.MACD,
-        atr,
-        patron: "Sin patrón",
-        adx: "N/A",
-        vwap: "N/A",
-        mfi: "N/A",
-        bollingerBands: {
-          superior: "N/A",
-          inferior: "N/A"
-        },
-        tecnicoCombinado: "RSI y MACD calculados de forma real",
-        soportes: [Math.min(...closes.slice(-14))],
-        resistencias: [Math.max(...closes.slice(-14))],
-        tendencia: (closes.at(-1) > closes[0]) ? "Alcista" : "Bajista",
-        entradaSugerida: "Esperar confirmación de ruptura"
-      },
+  rsi,
+  macd: macdResult.MACD,
+  atr,
+  patron: "Sin patrón",
+  adx: adxResult?.adx || "N/A",
+  vwap: "N/A",
+  mfi,
+  bollingerBands: {
+    superior: bbResult?.upper || "N/A",
+    inferior: bbResult?.lower || "N/A",
+    media: bbResult?.middle || "N/A"
+  },
+  tecnicoCombinado: "Indicadores técnicos calculados con datos reales",
+  soportes: [Math.min(...closes.slice(-14))],
+  resistencias: [Math.max(...closes.slice(-14))],
+  tendencia: (closes.at(-1) > closes[0]) ? "Alcista" : "Bajista",
+  entradaSugerida: "Esperar confirmación de ruptura"
+}
+
 
       fundamental: {
         marketCap: "N/A",
