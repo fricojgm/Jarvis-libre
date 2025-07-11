@@ -1,62 +1,28 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const {
-  RSI, MACD, ATR, BollingerBands, ADX, MFI, SMA, EMA
-} = require('technicalindicators');
+const { RSI, MACD, ATR, ADX, MFI, BollingerBands, SMA, EMA, VWAP } = require('technicalindicators');
 
 const app = express();
 app.use(cors());
 
 const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
-function mapTimeframeToAgg(timeframe) {
-  const map = {
-    minuto: 'minute',
-    hora: 'hour',
-    diario: 'day',
-    diaria: 'day',
-    semanal: 'week',
-    mensual: 'month'
-  };
-  return map[timeframe] || timeframe;
-}
-
-async function getVelas(symbol) {
-  const timeframes = ['day', 'week', 'month', 'hour'];
-  const result = {};
-
-  for (const tf of timeframes) {
-    try {
-      const to = new Date().toISOString().split('T')[0];
-      const from = new Date();
-      from.setDate(from.getDate() - 100);
-      const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${tf}/${from.toISOString().split('T')[0]}/${to}?adjusted=true&sort=desc&limit=3&apiKey=${API_KEY}`;
-      const r = await axios.get(url);
-      result[tf] = (r.data?.results || []).map(v => ({
-        o: v.o, h: v.h, l: v.l, c: v.c, v: v.v, t: v.t
-      }));
-    } catch {
-      result[tf] = [];
-    }
-  }
-
-  return result;
-}
-
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
-  let { timeframe = 'day', cantidad = 100 } = req.query;
-  timeframe = mapTimeframeToAgg(timeframe);
-  cantidad = Math.max(parseInt(cantidad), 30);
+  const { timeframe = 'day', cantidad = 100 } = req.query;
 
   try {
-    const to = new Date().toISOString().split('T')[0];
-    const from = new Date();
-    from.setDate(from.getDate() - cantidad);
-    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/${from.toISOString().split('T')[0]}/${to}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
-    const resp = await axios.get(url);
-    const datos = resp.data?.results;
+    const hoy = new Date();
+    const desde = new Date();
+    desde.setDate(hoy.getDate() - cantidad);
+    const dateFrom = desde.toISOString().split('T')[0];
+    const dateTo = hoy.toISOString().split('T')[0];
+
+    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/${dateFrom}/${dateTo}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
+    const response = await axios.get(url);
+
+    const datos = response.data.results;
 
     if (!datos || datos.length < 30) {
       return res.status(400).json({ error: 'No hay suficientes datos históricos' });
@@ -67,56 +33,51 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const lows = datos.map(p => p.l);
     const volumes = datos.map(p => p.v);
 
-    let rsi, macdR, atr, bb, adxR, mfi, sma20, ema20, vwap;
-    try { rsi = RSI.calculate({ values: closes, period: 14 }).pop(); } catch {}
-    try { macdR = MACD.calculate({ values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }).pop(); } catch {}
-    try { atr = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 }).pop(); } catch {}
-    try { bb = BollingerBands.calculate({ period: 20, stdDev: 2, values: closes }).pop(); } catch {}
-    try { adxR = ADX.calculate({ close: closes, high: highs, low: lows, period: 14 }).pop(); } catch {}
-    try { mfi = MFI.calculate({ high: highs, low: lows, close: closes, volume: volumes, period: 14 }).pop(); } catch {}
-    try { sma20 = SMA.calculate({ period: 20, values: closes }).pop(); } catch {}
-    try { ema20 = EMA.calculate({ period: 20, values: closes }).pop(); } catch {}
-    try {
-      const tp = datos.map(p => (p.h + p.l + p.c) / 3);
-      const totalVol = volumes.reduce((a, b) => a + b, 0);
-      vwap = tp.map((t, i) => t * volumes[i]).reduce((a, b) => a + b, 0) / totalVol;
-    } catch {}
+    const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
+    const macdObj = MACD.calculate({
+      values: closes,
+      fastPeriod: 12,
+      slowPeriod: 26,
+      signalPeriod: 9,
+      SimpleMAOscillator: false,
+      SimpleMASignal: false
+    }).at(-1);
+    const atr = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 }).at(-1);
+    const adxObj = ADX.calculate({ high: highs, low: lows, close: closes, period: 14 }).at(-1);
+    const mfi = MFI.calculate({ high: highs, low: lows, close: closes, volume: volumes, period: 14 }).at(-1);
+    const bb = BollingerBands.calculate({ period: 20, stdDev: 2, values: closes }).at(-1);
+    const sma20 = SMA.calculate({ period: 20, values: closes }).at(-1);
+    const ema20 = EMA.calculate({ period: 20, values: closes }).at(-1);
+    const vwap = VWAP.calculate({ close: closes, high: highs, low: lows, volume: volumes }).at(-1);
 
-    const patron = (() => {
-      const last = datos.at(-1);
-      const body = Math.abs(last.c - last.o);
-      const range = last.h - last.l;
-      const upper = last.h - Math.max(last.c, last.o);
-      const lower = Math.min(last.c, last.o) - last.l;
-      if (body / range < 0.1 && upper / range > 0.2 && lower / range > 0.2) return 'Doji';
-      if (lower / body > 2 && upper / body < 0.2) return 'Hammer';
-      if (upper / body > 2 && lower / body < 0.2) return 'Shooting Star';
-      return 'Sin patrón';
-    })();
-
-    // Datos fundamentales
-    let fundamental = { marketCap: "N/A", peRatio: "N/A", eps: "N/A", dividendYield: "N/A" };
+    // Fundamentales desde Polygon
+    let fundamental = {
+      marketCap: "N/A", peRatio: "N/A", eps: "N/A", dividendYield: "N/A"
+    };
     try {
-      const f = await axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`);
-      const r = f.data?.results?.[0];
-      if (r) {
+      const finResp = await axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&apiKey=${API_KEY}`);
+      const f = finResp.data.results?.[0]?.financials?.income_statement;
+      const mcap = finResp.data.results?.[0]?.market_cap;
+      if (f && mcap) {
         fundamental = {
-          marketCap: r.market_cap || "N/A",
-          peRatio: r.pe_ratio || "N/A",
-          eps: r.eps || "N/A",
-          dividendYield: r.dividend_yield || "N/A"
+          marketCap: mcap,
+          peRatio: f.pe_ratio || "N/A",
+          eps: f.eps || "N/A",
+          dividendYield: f.dividend_yield || "N/A"
         };
       }
-    } catch {}
+    } catch (e) {
+      console.warn("⚠️ Fallo en fundamentales:", e.message);
+    }
 
-    // Short interest
+    // Short Interest
     let shortInterest = {
       shortFloat: "N/A", shortVolume: "N/A", shortVolumeRatio: "N/A",
       totalVolume: "N/A", shortInterestTotal: "N/A", avgDailyVolume: "N/A", daysToCover: "N/A"
     };
     try {
-      const s = await axios.get(`https://api.polygon.io/v3/reference/shorts?ticker=${symbol}&apiKey=${API_KEY}`);
-      const d = s.data?.results?.[0];
+      const siResp = await axios.get(`https://api.polygon.io/v3/reference/shorts?ticker=${symbol}&apiKey=${API_KEY}`);
+      const d = siResp.data.results?.[0];
       if (d) {
         shortInterest = {
           shortFloat: d.short_float || "N/A",
@@ -128,23 +89,45 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
           daysToCover: d.days_to_cover || "N/A"
         };
       }
-    } catch {}
+    } catch (e) {
+      console.warn("⚠️ Fallo en short interest:", e.message);
+    }
 
     // Noticias
     let noticias = [];
     try {
-      const news = await axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${API_KEY}`);
-      noticias = (news.data?.results || []).map(n => ({
+      const newsResp = await axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${API_KEY}`);
+      noticias = newsResp.data.results.map(n => ({
         titulo: n.title,
         resumen: n.description,
-        fuente: n.publisher.name,
+        fuente: n.publisher?.name || "N/A",
         url: n.article_url,
         fecha: n.published_utc,
         sentimiento: "neutral"
       }));
-    } catch {}
+    } catch (e) {
+      console.warn("⚠️ Fallo en noticias:", e.message);
+    }
 
-    const velas = await getVelas(symbol);
+    // Velas multiframe (últimas 3)
+    const obtenerVelas = async (tf) => {
+      try {
+        const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${tf}/${dateFrom}/${dateTo}?adjusted=true&sort=desc&limit=3&apiKey=${API_KEY}`;
+        const r = await axios.get(url);
+        return r.data.results?.map(x => ({
+          o: x.o, h: x.h, l: x.l, c: x.c, v: x.v, t: x.t
+        })) || [];
+      } catch {
+        return [];
+      }
+    };
+
+    const velas = {
+      day: await obtenerVelas("day"),
+      week: await obtenerVelas("week"),
+      month: await obtenerVelas("month"),
+      hour: await obtenerVelas("hour")
+    };
 
     res.json({
       symbol,
@@ -152,25 +135,22 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       precioActual: closes.at(-1),
       historico: closes.slice(-14),
       tecnico: {
-        rsi, macd: macdR?.MACD || "N/A", atr, adx: adxR?.adx || "N/A", mfi,
-        bollingerBands: {
-          superior: bb?.upper || "N/A",
-          inferior: bb?.lower || "N/A"
-        },
-        sma20, ema20, vwap, patron,
+        rsi, macd: macdObj?.MACD, atr,
+        adx: adxObj?.adx || "N/A", mfi,
+        bollingerBands: { superior: bb?.upper, inferior: bb?.lower },
+        sma20, ema20, vwap,
+        patron: "Sin patrón",
         tecnicoCombinado: "Indicadores técnicos calculados correctamente",
         soportes: [Math.min(...closes.slice(-14))],
         resistencias: [Math.max(...closes.slice(-14))],
         tendencia: closes.at(-1) > closes[0] ? "Alcista" : "Bajista",
-        entradaSugerida: patron === 'Doji' ? 'Posible reversión' : 'Esperar confirmación'
+        entradaSugerida: "Esperar confirmación"
       },
       fundamental,
       shortInterest,
       volumen: {
         volumenActual: volumes.at(-1),
-        volumenPromedio30Dias: (
-          volumes.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, volumes.length)
-        ).toFixed(2),
+        volumenPromedio30Dias: (volumes.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, volumes.length)).toFixed(2),
         volumenAcumulado: volumes.reduce((a, b) => a + b, 0).toFixed(2)
       },
       resumenDia: {
@@ -189,17 +169,19 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       },
       horaNY: new Date().toISOString(),
       horaLocal: new Date().toISOString(),
-      mercado: { estado: "Desconocido", tiempoParaEvento: "N/A" }
+      mercado: {
+        estado: "Desconocido",
+        tiempoParaEvento: "N/A"
+      }
     });
 
   } catch (err) {
-    console.error("🔥 ERROR:", err);
+    console.error("❌ Error general:", err.message);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor live en http://localhost:${PORT}`);
+  console.log(`Servidor escuchando en http://localhost:${PORT}`);
 });
-
