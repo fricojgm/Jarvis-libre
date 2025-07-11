@@ -17,7 +17,8 @@ const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
-  const { timeframe = 'day', cantidad = 100 } = req.query;
+  let { timeframe = 'day', cantidad = 100 } = req.query;
+  cantidad = Math.max(parseInt(cantidad), 30); // Forzar mínimo de 30
 
   try {
     const hoy = new Date();
@@ -40,7 +41,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const lows = datos.map(p => p.l);
     const volumes = datos.map(p => p.v);
 
-    // Indicadores técnicos reales
     const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
     const macdResult = MACD.calculate({
       values: closes,
@@ -163,3 +163,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
 });
+
