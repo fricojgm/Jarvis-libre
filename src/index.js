@@ -7,7 +7,8 @@ const {
   ATR,
   BollingerBands,
   ADX,
-  MFI
+  MFI,
+  // Candle pattern detection (pseudocódigo)
 } = require('technicalindicators');
 
 const app = express();
@@ -15,24 +16,86 @@ app.use(cors());
 
 const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
+async function getFundamentales(symbol) {
+  try {
+    const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`;
+    const resp = await axios.get(url);
+    const r = resp.data.results?.[0]?.financials;
+    return r ? {
+      marketCap: Number(r.balance_sheet?.assets?.value) || "N/A",
+      peRatio: Number(r.valuation_ratios?.price_to_earnings) || "N/A",
+      eps: Number(r.income_statement?.eps) || "N/A",
+      dividendYield: Number(r.valuation_ratios?.dividend_yield) || "N/A"
+    } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getShortInterest(symbol) {
+  try {
+    const url = `https://api.polygon.io/vX/reference/tickers?symbol=${symbol}&apiKey=${API_KEY}`;
+    const resp = await axios.get(url);
+    // Suponemos que short_interest está en resp.data.results[0].short_interest
+    const si = resp.data.results?.[0]?.short_interest;
+    return si ? {
+      shortFloat: si.short_percent_of_float,
+      shortVolume: si.short_volume,
+      shortVolumeRatio: si.short_volume_ratio,
+      totalVolume: si.volume,
+      daysToCover: si.days_to_cover
+    } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getNoticias(symbol) {
+  try {
+    const url = `https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&apiKey=${API_KEY}`;
+    const resp = await axios.get(url);
+    return resp.data.results.map(n => ({
+      titulo: n.title,
+      resumen: n.summary,
+      fuente: n.publisher,
+      url: n.article_url,
+      fecha: n.published_utc,
+      sentimiento: n.sentiment || "neutral"
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function detectarPatron(candles) {
+  const last = candles.at(-1);
+  const body = Math.abs(last.c - last.o);
+  const range = last.h - last.l;
+  const upper = last.h - Math.max(last.c, last.o);
+  const lower = Math.min(last.c, last.o) - last.l;
+
+  if (body / range < 0.1 && upper / range > 0.2 && lower / range > 0.2) return 'Doji';
+  if (lower / body > 2 && upper / body < 0.2) return 'Hammer';
+  if (upper / body > 2 && lower / body < 0.2) return 'Shooting Star';
+  return 'Sin patrón';
+}
+
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
   let { timeframe = 'day', cantidad = 100 } = req.query;
-  cantidad = Math.max(parseInt(cantidad), 30); // mínimo 30 velas
+  cantidad = Math.max(parseInt(cantidad), 30);
 
   try {
-    const hoy = new Date();
+    const fechaHasta = new Date();
     const desde = new Date();
-    desde.setDate(hoy.getDate() - cantidad);
-
+    desde.setDate(fechaHasta.getDate() - cantidad);
     const dateFrom = desde.toISOString().split('T')[0];
-    const dateTo = hoy.toISOString().split('T')[0];
+    const dateTo = fechaHasta.toISOString().split('T')[0];
 
-    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${dateFrom}/${dateTo}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
-    const response = await axios.get(url);
-    const datos = response.data.results;
+    const u = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${dateFrom}/${dateTo}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
+    const datos = (await axios.get(u)).data.results;
 
-    if (!datos || datos.length < 30) {
+    if (!datos?.length) {
       return res.status(400).json({ error: 'No hay suficientes datos históricos' });
     }
 
@@ -41,137 +104,66 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const lows = datos.map(p => p.l);
     const volumes = datos.map(p => p.v);
 
-    // Indicadores técnicos
     const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
-    const macdResult = MACD.calculate({
-      values: closes,
-      fastPeriod: 12,
-      slowPeriod: 26,
-      signalPeriod: 9,
-      SimpleMAOscillator: false,
-      SimpleMASignal: false
-    }).at(-1);
-    const atr = ATR.calculate({
-      high: highs,
-      low: lows,
-      close: closes,
-      period: 14
-    }).at(-1);
-    const bbResult = BollingerBands.calculate({
-      period: 20,
-      stdDev: 2,
-      values: closes
-    }).at(-1);
-    const adxResult = ADX.calculate({
-      close: closes,
-      high: highs,
-      low: lows,
-      period: 14
-    }).at(-1);
-    const mfi = MFI.calculate({
-      high: highs,
-      low: lows,
-      close: closes,
-      volume: volumes,
-      period: 14
-    }).at(-1);
+    const macdR = MACD.calculate({ values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }).at(-1);
+    const atr = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 }).at(-1);
+    const bb = BollingerBands.calculate({ period: 20, stdDev: 2, values: closes }).at(-1);
+    const adxR = ADX.calculate({ close: closes, high: highs, low: lows, period: 14 }).at(-1);
+    const mfi = MFI.calculate({ high: highs, low: lows, close: closes, volume: volumes, period: 14 }).at(-1);
 
-    // VWAP real
-    const typicalPrices = datos.map(p => (p.h + p.l + p.c) / 3);
-    const totalVolume = volumes.reduce((a, b) => a + b, 0);
-    const vwap = typicalPrices
-      .map((tp, i) => tp * volumes[i])
-      .reduce((a, b) => a + b, 0) / totalVolume;
+    const tp = datos.map(p => (p.h + p.l + p.c) / 3);
+    const totVol = volumes.reduce((a, b) => a + b, 0);
+    const vwap = tp.map((t, i) => t * volumes[i]).reduce((a, b) => a + b, 0) / totVol;
 
-    // Fundamentales reales desde Polygon
-    let fundamental = {
-      marketCap: "N/A",
-      peRatio: "N/A",
-      eps: "N/A",
-      dividendYield: "N/A"
-    };
+    const fundamental = await getFundamentales(symbol) || {};
+    const shortI = await getShortInterest(symbol) || {};
+    const noticias = await getNoticias(symbol);
 
-    try {
-      const fundamentalsUrl = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`;
-      const fundamentalsResp = await axios.get(fundamentalsUrl);
-      const result = fundamentalsResp.data.results?.[0]?.financials;
-
-      if (result) {
-        fundamental = {
-          marketCap: Number(result.balance_sheet?.assets?.value) || "N/A",
-          peRatio: Number(result.valuation_ratios?.price_to_earnings) || "N/A",
-          eps: Number(result.income_statement?.eps) || "N/A",
-          dividendYield: Number(result.valuation_ratios?.dividend_yield) || "N/A"
-        };
-      }
-    } catch (e) {
-      console.warn("Fundamentales no disponibles:", e.message);
-    }
-
-    const precioActual = closes.at(-1);
+    const patron = detectarPatron(datos);
 
     res.json({
       symbol,
       timeframe,
-      precioActual,
+      precioActual: closes.at(-1),
       historico: closes.slice(-14),
 
       tecnico: {
         rsi,
-        macd: macdResult?.MACD || "N/A",
+        macd: macdR?.MACD || "N/A",
         atr,
-        patron: "Sin patrón",
-        adx: adxResult?.adx || "N/A",
+        adx: adxR?.adx || "N/A",
         vwap,
         mfi,
-        bollingerBands: {
-          superior: bbResult?.upper || "N/A",
-          inferior: bbResult?.lower || "N/A",
-          media: bbResult?.middle || "N/A"
-        },
-        tecnicoCombinado: "Indicadores técnicos calculados con datos reales",
+        bollingerBands: { superior: bb?.upper || "N/A", inferior: bb?.lower || "N/A" },
+        patron,
+        tecnicoCombinado: `Patrón: ${patron}, RSI=${rsi.toFixed(2)}, MACD=${macdR?.MACD?.toFixed(2)}`,
         soportes: [Math.min(...closes.slice(-14))],
         resistencias: [Math.max(...closes.slice(-14))],
         tendencia: closes.at(-1) > closes[0] ? "Alcista" : "Bajista",
-        entradaSugerida: "Esperar confirmación de ruptura"
+        entradaSugerida: patron === 'Doji' ? 'Posible reversión' : 'Esperar confirmación'
       },
 
       fundamental,
 
-      shortInterest: {
-        shortFloat: "N/A",
-        shortVolume: "N/A",
-        shortVolumeRatio: "N/A",
-        totalVolume: "N/A",
-        shortInterestTotal: "N/A",
-        avgDailyVolume: "N/A",
-        daysToCover: "N/A"
-      },
+      shortInterest: shortI,
 
       volumen: {
         volumenActual: volumes.at(-1),
-        volumenPromedio30Dias: (
-          volumes.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, volumes.length)
-        ).toFixed(2),
+        volumenPromedio30Dias: (volumes.slice(-30).reduce((a, b) => a + b, 0) / 30).toFixed(2),
         volumenAcumulado: volumes.reduce((a, b) => a + b, 0).toFixed(2)
       },
 
       resumenDia: {
         afterHours: "N/A",
         preMarket: "N/A",
-        aperturaDiaAnterior: datos.at(-2)?.o || "N/A",
-        minimoDiaAnterior: datos.at(-2)?.l || "N/A",
-        maximoDiaAnterior: datos.at(-2)?.h || "N/A",
-        cierreDiaAnterior: datos.at(-2)?.c || "N/A",
-        volumenResumenDiario: datos.at(-2)?.v || "N/A"
+        aperturaDiaAnterior: datos.at(-2)?.o,
+        minimoDiaAnterior: datos.at(-2)?.l,
+        maximoDiaAnterior: datos.at(-2)?.h,
+        cierreDiaAnterior: datos.at(-2)?.c,
+        volumenResumenDiario: datos.at(-2)?.v
       },
 
-      noticias: [],
-      resumen: {
-        estadoActual: "Precaución",
-        riesgo: "Medio",
-        oportunidad: "RSI y MACD muestran señales mixtas"
-      },
+      noticias,
 
       horaNY: new Date().toISOString(),
       horaLocal: new Date().toISOString(),
@@ -181,13 +173,12 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       }
     });
 
-  } catch (error) {
-    console.error("Error:", error.message);
-    res.status(500).json({ error: 'Fallo al obtener datos o calcular indicadores' });
+  } catch (e) {
+    console.error(e.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+
