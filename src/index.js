@@ -1,160 +1,144 @@
 const express = require('express');
 const cors = require('cors');
-const app = express();
-const PORT = process.env.PORT || 3000;
+const axios = require('axios');
+const { RSI, MACD, ATR } = require('technicalindicators');
 
+const app = express();
 app.use(cors());
+
+const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
-  const { timeframe = 'day', cantidad = 5000 } = req.query;
+  const { timeframe = 'day', cantidad = 100 } = req.query;
 
-  // Simulación de datos: reemplaza esto con tus llamadas reales a Polygon
-  const precios = [201, 201.5, 200.3, 201.56, 201, 201.08, 205.17, 207.82, 212.44, 213.55, 209.95, 210.01, 211.14, 212.41];
-  const precioRealVivo = 212.4;
-  const rsi = 38.22;
-  const macd = 3.79;
-  const patron = "Sin patrón";
-  const atr = 2.49;
-  const adx = 25.65;
-  const vwap = 84.23;
-  const mfi = 52.9;
-  const bb = { superior: 215.41, inferior: 191.99 };
-  const tecnicoCombo = "Precaución: RSI y MFI neutros. MACD bajista";
+  try {
+    // 1. Obtener datos históricos de Polygon (últimos 100 días)
+    const hoy = new Date();
+    const desde = new Date();
+    desde.setDate(hoy.getDate() - cantidad);
 
-  const fundamentales = {
-    marketCap: 9664219753200,
-    peRatio: 32.981366459627324,
-    eps: 6.44,
-    dividendYield: 0.015
-  };
+    const dateFrom = desde.toISOString().split('T')[0];
+    const dateTo = hoy.toISOString().split('T')[0];
 
-  const shortVolume = {
-    shortVolume: 5683713,
-    shortVolumeRatio: 34.95,
-    totalVolume: 16264662
-  };
+    const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${dateFrom}/${dateTo}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
+    const response = await axios.get(url);
 
-  const shortData = {
-    shortInterestTotal: 45746430,
-    avgDailyVolume: 23901107,
-    daysToCover: 1.91
-  };
-
-  const volumenAcum = "275031354359.00";
-
-  const ohlcCompleto = [{ volumen: 44443503 }];
-
-  const velas = {
-    diario: [],
-    semanal: [],
-    mensual: [],
-    hora: []
-  };
-
-  const resumenDiario = {
-    afterHours: "N/A",
-    preMarket: "N/A",
-    volumen: "N/A"
-  };
-
-  const resumenAyer = {
-    apertura: 210.505,
-    minimo: 210.03,
-    maximo: 213.48,
-    cierre: 212.41
-  };
-
-  const noticias = [
-    {
-      titulo: "ROSEN, LEADING TRIAL ATTORNEYS...",
-      sentimiento: "negative",
-      resumen: "Rosen Law Firm alerts Apple investors...",
-      url: "https://www.globenewswire.com/news-release/2025/07/11/3113781/673/en/...",
-      fuente: "GlobeNewswire Inc.",
-      fecha: "2025-07-11T00:50:00Z"
+    const datos = response.data.results;
+    if (!datos || datos.length < 30) {
+      return res.status(400).json({ error: 'No hay suficientes datos históricos' });
     }
-  ];
 
-  const horaNY = new Date();
-  const horaLocal = new Date();
-  const estado = "Cerrado";
-  const tiempoParaEvento = "00:00:18";
+    const closes = datos.map(p => p.c);
+    const highs = datos.map(p => p.h);
+    const lows = datos.map(p => p.l);
+    const volumes = datos.map(p => p.v);
 
-  res.json({
-    symbol,
-    timeframe,
-    precioActual: precioRealVivo !== "N/A" ? precioRealVivo : precios.at(-1),
-    historico: precios.slice(-14),
+    // 2. Cálculo de indicadores reales
+    const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
+    const macdResult = MACD.calculate({
+      values: closes,
+      fastPeriod: 12,
+      slowPeriod: 26,
+      signalPeriod: 9,
+      SimpleMAOscillator: false,
+      SimpleMASignal: false
+    }).at(-1);
 
-    tecnico: {
-      rsi,
-      macd,
-      patron,
-      atr,
-      adx,
-      vwap,
-      mfi,
-      bollingerBands: bb,
-      tecnicoCombinado: tecnicoCombo
-    },
+    const atr = ATR.calculate({
+      high: highs,
+      low: lows,
+      close: closes,
+      period: 14
+    }).at(-1);
 
-    fundamental: {
-      marketCap: fundamentales.marketCap,
-      peRatio: fundamentales.peRatio,
-      eps: fundamentales.eps,
-      dividendYield: fundamentales.dividendYield
-    },
+    // 3. Precio actual
+    const precioActual = closes.at(-1);
 
-    shortInterest: {
-      shortFloat: "N/A",
-      shortVolume: shortVolume.shortVolume,
-      shortVolumeRatio: shortVolume.shortVolumeRatio,
-      totalVolume: shortVolume.totalVolume,
-      shortInterestTotal: shortData.shortInterestTotal,
-      avgDailyVolume: shortData.avgDailyVolume,
-      daysToCover: shortData.daysToCover
-    },
+    // 4. Estructura final
+    res.json({
+      symbol,
+      timeframe,
+      precioActual,
+      historico: closes.slice(-14),
 
-    volumen: {
-      volumenActual: ohlcCompleto.at(-1)?.volumen || "N/A",
-      volumenPromedio30Dias: (
-        ohlcCompleto
-          .slice(-30)
-          .map(c => c.volumen)
-          .reduce((a, b) => a + b, 0) / Math.min(ohlcCompleto.length, 30)
-      ).toFixed(2),
-      volumenAcumulado: volumenAcum
-    },
+      tecnico: {
+        rsi,
+        macd: macdResult.MACD,
+        atr,
+        patron: "Sin patrón",
+        adx: "N/A",
+        vwap: "N/A",
+        mfi: "N/A",
+        bollingerBands: {
+          superior: "N/A",
+          inferior: "N/A"
+        },
+        tecnicoCombinado: "RSI y MACD calculados de forma real",
+        soportes: [Math.min(...closes.slice(-14))],
+        resistencias: [Math.max(...closes.slice(-14))],
+        tendencia: (closes.at(-1) > closes[0]) ? "Alcista" : "Bajista",
+        entradaSugerida: "Esperar confirmación de ruptura"
+      },
 
-    velas: {
-      diario: velas.diario,
-      semanal: velas.semanal,
-      mensual: velas.mensual,
-      hora: velas.hora
-    },
+      fundamental: {
+        marketCap: "N/A",
+        peRatio: "N/A",
+        eps: "N/A",
+        dividendYield: "N/A"
+      },
 
-    resumenDia: {
-      afterHours: resumenDiario.afterHours,
-      preMarket: resumenDiario.preMarket,
-      aperturaDiaAnterior: resumenAyer.apertura,
-      minimoDiaAnterior: resumenAyer.minimo,
-      maximoDiaAnterior: resumenAyer.maximo,
-      cierreDiaAnterior: resumenAyer.cierre,
-      volumenResumenDiario: resumenDiario.volumen
-    },
+      shortInterest: {
+        shortFloat: "N/A",
+        shortVolume: "N/A",
+        shortVolumeRatio: "N/A",
+        totalVolume: "N/A",
+        shortInterestTotal: "N/A",
+        avgDailyVolume: "N/A",
+        daysToCover: "N/A"
+      },
 
-    noticias,
+      volumen: {
+        volumenActual: volumes.at(-1),
+        volumenPromedio30Dias: (
+          volumes.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, volumes.length)
+        ).toFixed(2),
+        volumenAcumulado: volumes.reduce((a, b) => a + b, 0).toFixed(2)
+      },
 
-    horaNY: horaNY.toISOString(),
-    horaLocal: horaLocal.toISOString(),
-    mercado: {
-      estado,
-      tiempoParaEvento
-    }
-  });
+      resumenDia: {
+        afterHours: "N/A",
+        preMarket: "N/A",
+        aperturaDiaAnterior: datos.at(-2)?.o || "N/A",
+        minimoDiaAnterior: datos.at(-2)?.l || "N/A",
+        maximoDiaAnterior: datos.at(-2)?.h || "N/A",
+        cierreDiaAnterior: datos.at(-2)?.c || "N/A",
+        volumenResumenDiario: datos.at(-2)?.v || "N/A"
+      },
+
+      noticias: [],
+      resumen: {
+        estadoActual: "Precaución",
+        riesgo: "Medio",
+        oportunidad: "RSI y MACD muestran señales mixtas"
+      },
+
+      horaNY: new Date().toISOString(),
+      horaLocal: new Date().toISOString(),
+      mercado: {
+        estado: "Desconocido",
+        tiempoParaEvento: "N/A"
+      }
+    });
+
+  } catch (error) {
+    console.error("Error:", error.message);
+    res.status(500).json({ error: 'Fallo al obtener datos o calcular indicadores' });
+  }
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
 });
+
