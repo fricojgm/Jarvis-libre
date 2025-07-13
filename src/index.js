@@ -10,28 +10,51 @@ app.use(cors());
 
 const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
-// 🔍 Función para obtener fundamentos desde Polygon
+// 🔍 Obtener fundamentales
 async function obtenerFundamentales(symbol, precioRealVivo) {
   try {
     const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`;
     const res = await axios.get(url);
     const d = res.data.results?.[0] || {};
-
     const dilutedShares = d.financials?.income_statement?.diluted_average_shares?.value;
     const eps = d.financials?.income_statement?.basic_earnings_per_share?.value;
-
     return {
       marketCap: (dilutedShares && precioRealVivo) ? (dilutedShares * precioRealVivo) : "N/A",
       eps: eps || "N/A",
       peRatio: (eps && precioRealVivo) ? (precioRealVivo / eps) : "N/A"
     };
+  } catch {
+    return { marketCap: "N/A", eps: "N/A", peRatio: "N/A" };
+  }
+}
 
-  } catch (err) {
-    console.warn(`⚠️ Error al obtener fundamentales para ${symbol}:`, err.message);
+// 📊 Obtener snapshot en tiempo real
+async function obtenerSnapshot(symbol) {
+  try {
+    const url = `https://api.polygon.io/v3/snapshot?ticker=${symbol}&order=asc&limit=1&sort=ticker&apiKey=${API_KEY}`;
+    const res = await axios.get(url);
+    return res.data.results?.[0] || {};
+  } catch {
+    return {};
+  }
+}
+
+// 📉 Obtener short interest más reciente
+async function obtenerShortInterest(symbol) {
+  try {
+    const url = `https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1000&sort=ticker.asc&apiKey=${API_KEY}`;
+    const res = await axios.get(url);
+    const recientes = res.data.results?.filter(x => x.short_interest && x.avg_daily_volume)?.at(-1);
     return {
-      marketCap: "N/A",
-      eps: "N/A",
-      peRatio: "N/A"
+      shortInterestTotal: recientes?.short_interest || "N/A",
+      avgDailyVolume: recientes?.avg_daily_volume || "N/A",
+      daysToCover: recientes?.days_to_cover || "N/A"
+    };
+  } catch {
+    return {
+      shortInterestTotal: "N/A",
+      avgDailyVolume: "N/A",
+      daysToCover: "N/A"
     };
   }
 }
@@ -59,44 +82,46 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const highs = datos.map(p => p.h);
     const lows = datos.map(p => p.l);
     const volumes = datos.map(p => p.v);
+    const velaActual = datos.at(-1);
+
+    const [
+      fundamental,
+      snapshot,
+      shortInterest
+    ] = await Promise.all([
+      obtenerFundamentales(symbol, velaActual.c),
+      obtenerSnapshot(symbol),
+      obtenerShortInterest(symbol)
+    ]);
 
     const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
-    const macdResult = MACD.calculate({
-      values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9,
-      SimpleMAOscillator: false, SimpleMASignal: false
-    }).at(-1);
+    const macdResult = MACD.calculate({ values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }).at(-1);
     const atr = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 }).at(-1);
-    const bb = BollingerBands.calculate({ period: 20, stdDev: 2, values: closes }).at(-1);
+    const bb = BollingerBands.calculate({ values: closes, period: 20, stdDev: 2 }).at(-1);
     const adx = ADX.calculate({ close: closes, high: highs, low: lows, period: 14 }).at(-1)?.adx;
     const mfi = MFI.calculate({ high: highs, low: lows, close: closes, volume: volumes, period: 14 }).at(-1);
     const sma20 = SMA.calculate({ values: closes, period: 20 }).at(-1);
     const ema20 = EMA.calculate({ values: closes, period: 20 }).at(-1);
     const vwap = VWAP.calculate({ close: closes, high: highs, low: lows, volume: volumes }).at(-1);
 
-    const velaActual = datos.at(-1);
-
     const velas = {
       day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
-      week: [
-        {
-          o: datos[0].o,
-          h: Math.max(...highs),
-          l: Math.min(...lows),
-          c: velaActual.c,
-          v: volumes.reduce((a, b) => a + b, 0),
-          t: datos.at(0).t
-        }
-      ],
-      month: [
-        {
-          o: datos[0].o,
-          h: Math.max(...highs),
-          l: Math.min(...lows),
-          c: velaActual.c,
-          v: volumes.reduce((a, b) => a + b, 0),
-          t: datos.at(0).t
-        }
-      ],
+      week: [{
+        o: datos[0].o,
+        h: Math.max(...highs),
+        l: Math.min(...lows),
+        c: velaActual.c,
+        v: volumes.reduce((a, b) => a + b, 0),
+        t: datos[0].t
+      }],
+      month: [{
+        o: datos[0].o,
+        h: Math.max(...highs),
+        l: Math.min(...lows),
+        c: velaActual.c,
+        v: volumes.reduce((a, b) => a + b, 0),
+        t: datos[0].t
+      }],
       hour: []
     };
 
@@ -111,11 +136,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         fecha: n.published_utc,
         sentimiento: n.insights?.sentiment || "neutral"
       }));
-    } catch (e) {
-      noticias = [];
-    }
-
-    const fundamental = await obtenerFundamentales(symbol, velaActual.c);
+    } catch {}
 
     res.json({
       symbol,
@@ -128,10 +149,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         atr,
         adx,
         mfi,
-        bollingerBands: {
-          superior: bb?.upper,
-          inferior: bb?.lower
-        },
+        bollingerBands: { superior: bb?.upper, inferior: bb?.lower },
         sma20,
         ema20,
         vwap,
@@ -143,17 +161,9 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         entradaSugerida: "Esperar confirmación"
       },
       fundamental,
-      shortInterest: {
-        shortFloat: "N/A",
-        shortVolume: "N/A",
-        shortVolumeRatio: "N/A",
-        totalVolume: "N/A",
-        shortInterestTotal: "N/A",
-        avgDailyVolume: "N/A",
-        daysToCover: "N/A"
-      },
+      shortInterest,
       volumen: {
-        volumenActual: velaActual.v,
+        volumenActual: snapshot?.session?.volume || velaActual.v,
         volumenPromedio30Dias: (
           volumes.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, volumes.length)
         ).toFixed(2),
@@ -176,7 +186,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       horaNY: new Date().toISOString(),
       horaLocal: new Date().toISOString(),
       mercado: {
-        estado: "Desconocido",
+        estado: snapshot.market_status || "Desconocido",
         tiempoParaEvento: "N/A"
       }
     });
