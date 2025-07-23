@@ -10,6 +10,38 @@ app.use(cors());
 
 const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
+// ——— Cálculo Target Técnico Afinado ———
+function calcularTargetTecnico(tecnico) {
+  const { soportes, resistencias, rsi, adx, macd, mfi } = tecnico;
+
+  const soporte = soportes?.[0];
+  const resistencia = resistencias?.[0];
+  if (!soporte || !resistencia) return null;
+
+  const rango = resistencia - soporte;
+  let base127 = resistencia + (rango * 1.272);
+  let base161 = resistencia + (rango * 1.618);
+
+  let ajuste = 0;
+  if (rsi > 70) ajuste -= 0.05;
+  if (adx < 15) ajuste -= 0.03;
+  if (macd < 0) ajuste -= 0.05;
+  if (rsi < 30 && mfi < 40) ajuste += 0.05;
+  if (rsi >= 50 && rsi <= 60 && mfi > 65) ajuste += 0.03;
+
+  const targetFinal = base127 * (1 + ajuste);
+
+  return {
+    soporte,
+    resistencia,
+    rango: parseFloat(rango.toFixed(2)),
+    proyeccion127: parseFloat(base127.toFixed(2)),
+    proyeccion161: parseFloat(base161.toFixed(2)),
+    ajuste: ajuste,
+    targetAfinado: parseFloat(targetFinal.toFixed(2))
+  };
+}
+
 // ——— Helper: fundamentales ———
 async function obtenerFundamentales(symbol, precioReal) {
   try {
@@ -88,7 +120,34 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const ema20 = EMA.calculate({ values: closes, period: 20 }).at(-1);
     const vwap = VWAP.calculate({ high: highs, low: lows, close: closes, volume: vols }).at(-1);
 
+    // Validar que indicadores críticos estén definidos
+    if (
+      rsi == null || isNaN(rsi) ||
+      macdR?.MACD == null || isNaN(macdR.MACD) ||
+      adx == null || isNaN(adx) ||
+      mfi == null || isNaN(mfi)
+    ) {
+      return res.status(500).json({
+        error: 'Faltan indicadores técnicos críticos (RSI, MACD, ADX o MFI)'
+      });
+    }
+
     const vela = datos.at(-1);
+    const soporte = Math.min(...closes.slice(-14));
+    const resistencia = Math.max(...closes.slice(-14));
+
+    const tecnico = {
+      rsi, macd: macdR?.MACD, atr, adx, mfi,
+      bollingerBands:{ superior: bb?.upper, inferior: bb?.lower },
+      sma20, ema20, vwap, patron:"Sin patrón", tecnicoCombinado:"Calculado",
+      soportes:[soporte], resistencias:[resistencia],
+      tendencia: closes.at(-1)>closes[0]?"Alcista":"Bajista", entradaSugerida:"Esperar"
+    };
+
+    const target = calcularTargetTecnico({
+      soportes: [soporte], resistencias: [resistencia], rsi, adx, macd: macdR?.MACD, mfi
+    });
+
     const velas = {
       day: datos.slice(-4).map(p=>({o:p.o,h:p.h,l:p.l,c:p.c,v:p.v,t:p.t})),
       week: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a,b)=>a+b,0), t: datos[0].t }],
@@ -99,12 +158,14 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     let noticias = [];
     try {
       const n = await axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&sort=published_utc&order=desc&apiKey=${API_KEY}`);
-      noticias = n.data.results.map(n=>({
+      noticias = n.data.results.map(n => ({
         titulo: n.title, resumen: n.description, url: n.article_url,
-        fuente: n.publisher?.name||"Desconocido", fecha: n.published_utc,
-        sentimiento: n.insights?.sentiment||"neutral"
+        fuente: n.publisher?.name || "Desconocido", fecha: n.published_utc,
+        sentimiento: n.insights?.sentiment || "neutral"
       }));
-    } catch {}
+    } catch (e) {
+      console.error("Error al obtener noticias:", e.message);
+    }
 
     const fundamental = await obtenerFundamentales(symbol, vela.c);
     const si = await obtenerShortInterest(symbol);
@@ -114,35 +175,35 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       symbol, timeframe,
       precioActual: vela.c,
       historico: closes.slice(-14),
-      tecnico: { rsi, macd: macdR?.MACD, atr, adx, mfi,
-        bollingerBands:{ superior: bb?.upper, inferior: bb?.lower },
-        sma20, ema20, vwap, patron:"Sin patrón", tecnicoCombinado:"Calculado",
-        soportes:[Math.min(...closes.slice(-14))], resistencias:[Math.max(...closes.slice(-14))],
-        tendencia: closes.at(-1)>closes[0]?"Alcista":"Bajista", entradaSugerida:"Esperar"
-      },
+      tecnico,
+      target,
       fundamental, shortInterest: si, shortVolume: sv,
-      volumen:{ volumenActual: vela.v,
-        volumenPromedio30Dias:(vols.slice(-30).reduce((a,b)=>a+b,0)/Math.min(30,vols.length)).toFixed(2),
-        volumenAcumulado: vols.reduce((a,b)=>a+b,0).toFixed(2)
+      volumen: {
+        volumenActual: vela.v,
+        volumenPromedio30Dias: (vols.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, vols.length)).toFixed(2),
+        volumenAcumulado: vols.reduce((a, b) => a + b, 0).toFixed(2)
       },
-      resumenDia:{
-        aperturaDiaAnterior: datos.at(-2)?.o||"N/A",
-        minimoDiaAnterior: datos.at(-2)?.l||"N/A",
-        maximoDiaAnterior: datos.at(-2)?.h||"N/A",
-        cierreDiaAnterior: datos.at(-2)?.c||"N/A",
-        volumenResumenDiario: datos.at(-2)?.v||"N/A"
+      resumenDia: {
+        aperturaDiaAnterior: datos.at(-2)?.o || "N/A",
+        minimoDiaAnterior: datos.at(-2)?.l || "N/A",
+        maximoDiaAnterior: datos.at(-2)?.h || "N/A",
+        cierreDiaAnterior: datos.at(-2)?.c || "N/A",
+        volumenResumenDiario: datos.at(-2)?.v || "N/A"
       },
       velas, noticias,
-      resumen:{ estadoActual:"Precaución", riesgo:"Medio", oportunidad:"Mixtas" },
-      horaNY:new Date().toISOString(), horaLocal:new Date().toISOString(),
-      mercado:{ estado:"Desconocido", tiempoParaEvento:"N/A" }
+      resumen: { estadoActual: "Precaución", riesgo: "Medio", oportunidad: "Mixtas" },
+      horaNY: new Date().toISOString(),
+      horaLocal: new Date().toISOString(),
+      mercado: { estado: "Desconocido", tiempoParaEvento: "N/A" }
     });
 
   } catch (e) {
-    res.status(500).json({ error:"Error interno" });
+    console.error("Error interno:", e.message);
+    res.status(500).json({ error: "Error interno" });
   }
 });
 
-const PORT = process.env.PORT||3000;
-app.listen(PORT, ()=>console.log(`Servidor en puerto ${PORT}`));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
 
+// Tu lógica Jarvis con alertas se mantiene igual aquí debajo...

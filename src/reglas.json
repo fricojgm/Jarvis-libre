@@ -1,0 +1,65 @@
+{
+  "AAPL": {
+    "comprar": {
+      "precioMayorA": 213.55,
+      "rsiMayorA": 55,
+      "volumenMayorA": 50000000
+    },
+    "vender": {
+      "rsiMenorA": 35,
+      "precioMenorQueEMA20": true
+    },
+    "mantener": {
+      "rsiEntre": [45, 60],
+      "macdPositivoSinCruce": true,
+      "volumenMenorQuePromedio": true
+    }
+  },
+  "TSLA": {
+    "comprar": {
+      "precioMayorA": 780,
+      "volumenMayorA": 6000000,
+      "macdCruceAlcista": true
+    },
+    "vender": {
+      "rsiMenorA": 40,
+      "macdNegativo": true,
+      "precioMenorQueVWAP": true
+    },
+    "mantener": {
+      "rsiEntre": [50, 65],
+      "patron": "Sin patrón",
+      "volumenEstable": true
+    }
+  },
+  "MSFT": {
+    "comprar": {
+      "precioMayorA": 440,
+      "volumenMayorA": 8000000,
+      "rsiMayorA": 60
+    },
+    "vender": {
+      "macdNegativo": true,
+      "precioMenorQueEMA20": true
+    },
+    "mantener": {
+      "rsiEntre": [45, 60],
+      "macdPositivoSinCruce": true
+    }
+  },
+  "NVDA": {
+    "comprar": {
+      "precioMayorA": 1350,
+      "rsiMayorA": 65,
+      "volumenMayorA": 15000000
+    },
+    "vender": {
+      "mfiMayorA": 85,
+      "precioMenorA": 1280
+    },
+    "mantener": {
+      "tendencia": "Alcista",
+      "volumenCae": true
+    }
+  }
+}
