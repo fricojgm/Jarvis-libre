@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const cheerio = require('cheerio');
 const {
   RSI, MACD, ATR, BollingerBands, ADX, MFI, SMA, EMA, VWAP
 } = require('technicalindicators');
@@ -13,7 +14,6 @@ const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 // ——— Cálculo Target Técnico Afinado ———
 function calcularTargetTecnico(tecnico) {
   const { soportes, resistencias, rsi, adx, macd, mfi } = tecnico;
-
   const soporte = soportes?.[0];
   const resistencia = resistencias?.[0];
   if (!soporte || !resistencia) return null;
@@ -42,6 +42,22 @@ function calcularTargetTecnico(tecnico) {
   };
 }
 
+// ——— Scraper Target Analistas desde MarketWatch ———
+async function obtenerTargetAnalistas(symbol) {
+  try {
+    const url = `https://www.marketwatch.com/investing/stock/${symbol}`;
+    const res = await axios.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const $ = cheerio.load(res.data);
+    const text = $('mw-rangebar .primary').first().text().trim();
+    const target = parseFloat(text.replace(/[^\d.]/g, ''));
+    return isNaN(target) ? null : target;
+  } catch {
+    return null;
+  }
+}
+
 // ——— Helper: fundamentales ———
 async function obtenerFundamentales(symbol, precioReal) {
   try {
@@ -55,8 +71,8 @@ async function obtenerFundamentales(symbol, precioReal) {
       eps: eps || 'N/A',
       peRatio: eps && precioReal ? precioReal / eps : 'N/A'
     };
-  } catch (e) {
-    return { marketCap:'N/A', eps:'N/A', peRatio:'N/A' };
+  } catch {
+    return { marketCap: 'N/A', eps: 'N/A', peRatio: 'N/A' };
   }
 }
 
@@ -73,7 +89,7 @@ async function obtenerShortInterest(symbol) {
       avgDailyVolumeSI: latest.avg_daily_volume,
       daysToCoverSI: latest.days_to_cover
     };
-  } catch (e) {
+  } catch {
     return {};
   }
 }
@@ -91,14 +107,14 @@ async function obtenerShortVolume(symbol) {
       shortVolumeRatio: latest.short_volume_ratio,
       totalVolumeSV: latest.total_volume
     };
-  } catch (e) {
+  } catch {
     return {};
   }
 }
 
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
-  const { timeframe = 'day', cantidad = 100 } = req.query;
+  const { timeframe = 'day', cantidad = 250 } = req.query;
   try {
     const now = new Date();
     const from = new Date(now);
@@ -107,20 +123,20 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const urlAggs = `${base}/${from.toISOString().split('T')[0]}/${now.toISOString().split('T')[0]}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
     const resp = await axios.get(urlAggs);
     const datos = resp.data.results;
-    if (!datos || datos.length < 30) return res.status(400).json({ error:'No suficientes datos' });
+    if (!datos || datos.length < 30) return res.status(400).json({ error: 'No suficientes datos' });
 
-    const closes = datos.map(p=>p.c), highs = datos.map(p=>p.h), lows = datos.map(p=>p.l), vols = datos.map(p=>p.v);
+    const closes = datos.map(p => p.c), highs = datos.map(p => p.h), lows = datos.map(p => p.l), vols = datos.map(p => p.v);
     const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
-    const macdR = MACD.calculate({values: closes, fastPeriod:12,slowPeriod:26,signalPeriod:9}).at(-1);
+    const macdR = MACD.calculate({ values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }).at(-1);
     const atr = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 }).at(-1);
     const bb = BollingerBands.calculate({ period: 20, stdDev: 2, values: closes }).at(-1);
     const adx = ADX.calculate({ high: highs, low: lows, close: closes, period: 14 }).at(-1)?.adx;
     const mfi = MFI.calculate({ high: highs, low: lows, close: closes, volume: vols, period: 14 }).at(-1);
     const sma20 = SMA.calculate({ values: closes, period: 20 }).at(-1);
+    const sma200 = closes.length >= 200 ? SMA.calculate({ values: closes, period: 200 }).at(-1) : null;
     const ema20 = EMA.calculate({ values: closes, period: 20 }).at(-1);
     const vwap = VWAP.calculate({ high: highs, low: lows, close: closes, volume: vols }).at(-1);
 
-    // Validar que indicadores críticos estén definidos
     if (
       rsi == null || isNaN(rsi) ||
       macdR?.MACD == null || isNaN(macdR.MACD) ||
@@ -138,20 +154,20 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 
     const tecnico = {
       rsi, macd: macdR?.MACD, atr, adx, mfi,
-      bollingerBands:{ superior: bb?.upper, inferior: bb?.lower },
-      sma20, ema20, vwap, patron:"Sin patrón", tecnicoCombinado:"Calculado",
-      soportes:[soporte], resistencias:[resistencia],
-      tendencia: closes.at(-1)>closes[0]?"Alcista":"Bajista", entradaSugerida:"Esperar"
+      bollingerBands: { superior: bb?.upper, inferior: bb?.lower },
+      sma20, sma200, ema20, vwap,
+      patron: "Sin patrón", tecnicoCombinado: "Calculado",
+      soportes: [soporte], resistencias: [resistencia],
+      tendencia: closes.at(-1) > closes[0] ? "Alcista" : "Bajista",
+      entradaSugerida: "Esperar"
     };
 
-    const target = calcularTargetTecnico({
-      soportes: [soporte], resistencias: [resistencia], rsi, adx, macd: macdR?.MACD, mfi
-    });
+    const target = calcularTargetTecnico(tecnico);
 
     const velas = {
-      day: datos.slice(-4).map(p=>({o:p.o,h:p.h,l:p.l,c:p.c,v:p.v,t:p.t})),
-      week: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a,b)=>a+b,0), t: datos[0].t }],
-      month: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a,b)=>a+b,0), t: datos[0].t }],
+      day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
+      week: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a, b) => a + b, 0), t: datos[0].t }],
+      month: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a, b) => a + b, 0), t: datos[0].t }],
       hour: []
     };
 
@@ -170,6 +186,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const fundamental = await obtenerFundamentales(symbol, vela.c);
     const si = await obtenerShortInterest(symbol);
     const sv = await obtenerShortVolume(symbol);
+    const targetAnalistas = await obtenerTargetAnalistas(symbol);
 
     res.json({
       symbol, timeframe,
@@ -177,6 +194,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       historico: closes.slice(-14),
       tecnico,
       target,
+      targetAnalistas,
       fundamental, shortInterest: si, shortVolume: sv,
       volumen: {
         volumenActual: vela.v,
@@ -205,5 +223,3 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
-
-// Tu lógica Jarvis con alertas se mantiene igual aquí debajo...
