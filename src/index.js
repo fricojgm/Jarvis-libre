@@ -11,52 +11,59 @@ app.use(cors());
 
 const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
-// ——— Cálculo Target Técnico Afinado ———
+// ——— Target Técnico Afinado ———
 function calcularTargetTecnico(tecnico) {
   const { soportes, resistencias, rsi, adx, macd, mfi } = tecnico;
   const soporte = soportes?.[0];
   const resistencia = resistencias?.[0];
   if (!soporte || !resistencia) return null;
-
   const rango = resistencia - soporte;
   let base127 = resistencia + (rango * 1.272);
   let base161 = resistencia + (rango * 1.618);
-
   let ajuste = 0;
   if (rsi > 70) ajuste -= 0.05;
   if (adx < 15) ajuste -= 0.03;
   if (macd < 0) ajuste -= 0.05;
   if (rsi < 30 && mfi < 40) ajuste += 0.05;
   if (rsi >= 50 && rsi <= 60 && mfi > 65) ajuste += 0.03;
-
   const targetFinal = base127 * (1 + ajuste);
-
   return {
-    soporte,
-    resistencia,
+    soporte, resistencia,
     rango: parseFloat(rango.toFixed(2)),
     proyeccion127: parseFloat(base127.toFixed(2)),
     proyeccion161: parseFloat(base161.toFixed(2)),
-    ajuste: ajuste,
-    targetAfinado: parseFloat(targetFinal.toFixed(2))
+    ajuste, targetAfinado: parseFloat(targetFinal.toFixed(2))
   };
 }
 
-// ——— Scraper: Target de analistas desde MarketWatch ———
-async function obtenerTargetAnalistas(symbol) {
+// ——— Scraper desde Finviz ———
+async function obtenerFinvizData(symbol) {
   try {
-    const url = `https://www.marketwatch.com/investing/stock/${symbol}`;
-    const res = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const url = `https://finviz.com/quote.ashx?t=${symbol}`;
+    const res = await axios.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
     const $ = cheerio.load(res.data);
-    const text = $('mw-rangebar .primary').first().text().trim();
-    const target = parseFloat(text.replace(/[^\d.]/g, ''));
-    return isNaN(target) ? null : target;
+    let targetAnalistas = null;
+    let sma200Delta = null;
+    $('table.snapshot-table2 tr').each((i, el) => {
+      $(el).find('td').each((j, cell) => {
+        const label = $(cell).text().trim();
+        const val = $(cell.next).text().trim();
+        if (label === 'Target Price') targetAnalistas = parseFloat(val);
+        if (label === 'SMA200') {
+          const num = parseFloat(val.replace('%', ''));
+          sma200Delta = isNaN(num) ? null : num;
+        }
+      });
+    });
+    return { targetAnalistas, sma200Delta };
   } catch {
-    return null;
+    return { targetAnalistas: null, sma200Delta: null };
   }
 }
 
-// ——— Fundamentales ———
+// ——— Fundamentales desde Polygon ———
 async function obtenerFundamentales(symbol, precioReal) {
   try {
     const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`;
@@ -74,7 +81,7 @@ async function obtenerFundamentales(symbol, precioReal) {
   }
 }
 
-// ——— Short interest ———
+// ——— Short Interest & Volume ———
 async function obtenerShortInterest(symbol) {
   try {
     const url = `https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1000&sort=settlement_date.desc&apiKey=${API_KEY}`;
@@ -92,7 +99,6 @@ async function obtenerShortInterest(symbol) {
   }
 }
 
-// ——— Short volume ———
 async function obtenerShortVolume(symbol) {
   try {
     const url = `https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&limit=1000&sort=date.desc&apiKey=${API_KEY}`;
@@ -110,7 +116,7 @@ async function obtenerShortVolume(symbol) {
   }
 }
 
-// ——— Ruta principal ———
+// ——— Ruta Principal ———
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
   const { timeframe = 'day', cantidad = 250 } = req.query;
@@ -118,8 +124,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const now = new Date();
     const from = new Date(now);
     from.setDate(now.getDate() - cantidad);
-    const base = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}`;
-    const urlAggs = `${base}/${from.toISOString().split('T')[0]}/${now.toISOString().split('T')[0]}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
+    const urlAggs = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/${from.toISOString().split('T')[0]}/${now.toISOString().split('T')[0]}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
     const resp = await axios.get(urlAggs);
     const datos = resp.data.results;
     if (!datos || datos.length < 30) return res.status(400).json({ error: 'No suficientes datos' });
@@ -132,11 +137,11 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const adx = ADX.calculate({ high: highs, low: lows, close: closes, period: 14 }).at(-1)?.adx;
     const mfi = MFI.calculate({ high: highs, low: lows, close: closes, volume: vols, period: 14 }).at(-1);
     const sma20 = SMA.calculate({ values: closes, period: 20 }).at(-1);
-    const sma200 = closes.length >= 200 ? SMA.calculate({ values: closes, period: 200 }).at(-1) : null;
     const ema20 = EMA.calculate({ values: closes, period: 20 }).at(-1);
     const vwap = VWAP.calculate({ high: highs, low: lows, close: closes, volume: vols }).at(-1);
+    const sma200 = closes.length >= 200 ? SMA.calculate({ values: closes, period: 200 }).at(-1) : null;
 
-    if ([rsi, macdR?.MACD, adx, mfi].some(v => v == null || isNaN(v))) {
+    if (rsi == null || isNaN(rsi) || macdR?.MACD == null || isNaN(macdR.MACD) || adx == null || isNaN(adx) || mfi == null || isNaN(mfi)) {
       return res.status(500).json({ error: 'Faltan indicadores críticos' });
     }
 
@@ -156,23 +161,39 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 
     const target = calcularTargetTecnico(tecnico);
     const fundamental = await obtenerFundamentales(symbol, vela.c);
+    const finviz = await obtenerFinvizData(symbol);
     const si = await obtenerShortInterest(symbol);
     const sv = await obtenerShortVolume(symbol);
-    const targetAnalistas = await obtenerTargetAnalistas(symbol);
 
     const swingCandidate =
-      sma200 && vela.c < sma200 &&
-      targetAnalistas && vela.c < targetAnalistas * 0.8 &&
-      fundamental.marketCap > 10000000000 &&
-      fundamental.peRatio > 5 && fundamental.peRatio < 35;
+      finviz.sma200Delta != null &&
+      finviz.sma200Delta < 0 &&
+      target?.targetAfinado > vela.c * 1.2 &&
+      typeof fundamental.marketCap === 'number' && fundamental.marketCap > 10e9 &&
+      typeof fundamental.eps === 'number' && fundamental.eps > 0;
+
+    const noticias = [];
+    try {
+      const r = await axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&sort=published_utc&order=desc&apiKey=${API_KEY}`);
+      noticias.push(...r.data.results.map(n => ({
+        titulo: n.title, resumen: n.description, url: n.article_url,
+        fuente: n.publisher?.name || "Desconocido", fecha: n.published_utc,
+        sentimiento: n.insights?.sentiment || "neutral"
+      })));
+    } catch {}
 
     res.json({
       symbol, timeframe,
       precioActual: vela.c,
       historico: closes.slice(-14),
-      tecnico, target, targetAnalistas,
-      swingCandidate,
-      fundamental, shortInterest: si, shortVolume: sv,
+      tecnico,
+      target,
+      targetAnalistas: finviz.targetAnalistas,
+      sma200Delta: finviz.sma200Delta,
+      swingCandidate: swingCandidate || false,
+      fundamental,
+      shortInterest: si,
+      shortVolume: sv,
       volumen: {
         volumenActual: vela.v,
         volumenPromedio30Dias: (vols.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, vols.length)).toFixed(2),
@@ -191,7 +212,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         month: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a, b) => a + b, 0), t: datos[0].t }],
         hour: []
       },
-      noticias: [],
+      noticias,
       resumen: { estadoActual: "Precaución", riesgo: "Medio", oportunidad: "Mixtas" },
       horaNY: new Date().toISOString(),
       horaLocal: new Date().toISOString(),
@@ -199,11 +220,10 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     });
 
   } catch (e) {
-    console.error("❌ Error interno:", e.message);
+    console.error("Error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
-
