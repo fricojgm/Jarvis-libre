@@ -42,6 +42,15 @@ function calcularTargetTecnico(tecnico) {
   };
 }
 
+// ——— Swing candidate ———
+function esCandidatoSwing(tecnico, targetAnalistas, precio, fundamental) {
+  const debajoSMA200 = tecnico?.sma200 && precio < tecnico.sma200;
+  const descuentoTarget = targetAnalistas && precio < (targetAnalistas * 0.8);
+  const solidezFinanciera = fundamental?.eps > 0 && fundamental?.peRatio < 20;
+
+  return debajoSMA200 && descuentoTarget && solidezFinanciera;
+}
+
 // ——— Scraper Target Analistas desde MarketWatch ———
 async function obtenerTargetAnalistas(symbol) {
   try {
@@ -163,6 +172,10 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     };
 
     const target = calcularTargetTecnico(tecnico);
+    const targetAnalistas = await obtenerTargetAnalistas(symbol);
+    const fundamental = await obtenerFundamentales(symbol, vela.c);
+    const si = await obtenerShortInterest(symbol);
+    const sv = await obtenerShortVolume(symbol);
 
     const velas = {
       day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
@@ -183,11 +196,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       console.error("Error al obtener noticias:", e.message);
     }
 
-    const fundamental = await obtenerFundamentales(symbol, vela.c);
-    const si = await obtenerShortInterest(symbol);
-    const sv = await obtenerShortVolume(symbol);
-    const targetAnalistas = await obtenerTargetAnalistas(symbol);
-
     res.json({
       symbol, timeframe,
       precioActual: vela.c,
@@ -195,6 +203,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       tecnico,
       target,
       targetAnalistas,
+      swingCandidate: esCandidatoSwing(tecnico, targetAnalistas, vela.c, fundamental),
       fundamental, shortInterest: si, shortVolume: sv,
       volumen: {
         volumenActual: vela.v,
@@ -223,3 +232,4 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
+
