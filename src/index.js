@@ -42,22 +42,11 @@ function calcularTargetTecnico(tecnico) {
   };
 }
 
-// ——— Swing candidate ———
-function esCandidatoSwing(tecnico, targetAnalistas, precio, fundamental) {
-  const debajoSMA200 = tecnico?.sma200 && precio < tecnico.sma200;
-  const descuentoTarget = targetAnalistas && precio < (targetAnalistas * 0.8);
-  const solidezFinanciera = fundamental?.eps > 0 && fundamental?.peRatio < 20;
-
-  return debajoSMA200 && descuentoTarget && solidezFinanciera;
-}
-
-// ——— Scraper Target Analistas desde MarketWatch ———
+// ——— Scraper: Target de analistas desde MarketWatch ———
 async function obtenerTargetAnalistas(symbol) {
   try {
     const url = `https://www.marketwatch.com/investing/stock/${symbol}`;
-    const res = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
+    const res = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     const $ = cheerio.load(res.data);
     const text = $('mw-rangebar .primary').first().text().trim();
     const target = parseFloat(text.replace(/[^\d.]/g, ''));
@@ -67,7 +56,7 @@ async function obtenerTargetAnalistas(symbol) {
   }
 }
 
-// ——— Helper: fundamentales ———
+// ——— Fundamentales ———
 async function obtenerFundamentales(symbol, precioReal) {
   try {
     const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`;
@@ -85,7 +74,7 @@ async function obtenerFundamentales(symbol, precioReal) {
   }
 }
 
-// ——— Helper: short interest ———
+// ——— Short interest ———
 async function obtenerShortInterest(symbol) {
   try {
     const url = `https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1000&sort=settlement_date.desc&apiKey=${API_KEY}`;
@@ -103,7 +92,7 @@ async function obtenerShortInterest(symbol) {
   }
 }
 
-// ——— Helper: short volume ———
+// ——— Short volume ———
 async function obtenerShortVolume(symbol) {
   try {
     const url = `https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&limit=1000&sort=date.desc&apiKey=${API_KEY}`;
@@ -121,6 +110,7 @@ async function obtenerShortVolume(symbol) {
   }
 }
 
+// ——— Ruta principal ———
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
   const { timeframe = 'day', cantidad = 250 } = req.query;
@@ -146,15 +136,8 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const ema20 = EMA.calculate({ values: closes, period: 20 }).at(-1);
     const vwap = VWAP.calculate({ high: highs, low: lows, close: closes, volume: vols }).at(-1);
 
-    if (
-      rsi == null || isNaN(rsi) ||
-      macdR?.MACD == null || isNaN(macdR.MACD) ||
-      adx == null || isNaN(adx) ||
-      mfi == null || isNaN(mfi)
-    ) {
-      return res.status(500).json({
-        error: 'Faltan indicadores técnicos críticos (RSI, MACD, ADX o MFI)'
-      });
+    if ([rsi, macdR?.MACD, adx, mfi].some(v => v == null || isNaN(v))) {
+      return res.status(500).json({ error: 'Faltan indicadores críticos' });
     }
 
     const vela = datos.at(-1);
@@ -172,38 +155,23 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     };
 
     const target = calcularTargetTecnico(tecnico);
-    const targetAnalistas = await obtenerTargetAnalistas(symbol);
     const fundamental = await obtenerFundamentales(symbol, vela.c);
     const si = await obtenerShortInterest(symbol);
     const sv = await obtenerShortVolume(symbol);
+    const targetAnalistas = await obtenerTargetAnalistas(symbol);
 
-    const velas = {
-      day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
-      week: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a, b) => a + b, 0), t: datos[0].t }],
-      month: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a, b) => a + b, 0), t: datos[0].t }],
-      hour: []
-    };
-
-    let noticias = [];
-    try {
-      const n = await axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&sort=published_utc&order=desc&apiKey=${API_KEY}`);
-      noticias = n.data.results.map(n => ({
-        titulo: n.title, resumen: n.description, url: n.article_url,
-        fuente: n.publisher?.name || "Desconocido", fecha: n.published_utc,
-        sentimiento: n.insights?.sentiment || "neutral"
-      }));
-    } catch (e) {
-      console.error("Error al obtener noticias:", e.message);
-    }
+    const swingCandidate =
+      sma200 && vela.c < sma200 &&
+      targetAnalistas && vela.c < targetAnalistas * 0.8 &&
+      fundamental.marketCap > 10000000000 &&
+      fundamental.peRatio > 5 && fundamental.peRatio < 35;
 
     res.json({
       symbol, timeframe,
       precioActual: vela.c,
       historico: closes.slice(-14),
-      tecnico,
-      target,
-      targetAnalistas,
-      swingCandidate: esCandidatoSwing(tecnico, targetAnalistas, vela.c, fundamental),
+      tecnico, target, targetAnalistas,
+      swingCandidate,
       fundamental, shortInterest: si, shortVolume: sv,
       volumen: {
         volumenActual: vela.v,
@@ -217,7 +185,13 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
         cierreDiaAnterior: datos.at(-2)?.c || "N/A",
         volumenResumenDiario: datos.at(-2)?.v || "N/A"
       },
-      velas, noticias,
+      velas: {
+        day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
+        week: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a, b) => a + b, 0), t: datos[0].t }],
+        month: [{ o: datos[0].o, h: Math.max(...highs), l: Math.min(...lows), c: vela.c, v: vols.reduce((a, b) => a + b, 0), t: datos[0].t }],
+        hour: []
+      },
+      noticias: [],
       resumen: { estadoActual: "Precaución", riesgo: "Medio", oportunidad: "Mixtas" },
       horaNY: new Date().toISOString(),
       horaLocal: new Date().toISOString(),
@@ -225,7 +199,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     });
 
   } catch (e) {
-    console.error("Error interno:", e.message);
+    console.error("❌ Error interno:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });
