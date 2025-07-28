@@ -68,7 +68,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const vols = datos.map(p => p.v);
     const vela = datos.at(-1);
 
-    // Indicadores técnicos
     const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
     const macdR = MACD.calculate({ values: closes, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }).at(-1);
     const atr = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 }).at(-1);
@@ -92,18 +91,34 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       entradaSugerida: "Esperar"
     };
 
-    // Finviz extras
     const finviz = await obtenerFinvizData(symbol, vela.c);
 
-    // Fundamental
-    const r = await axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`);
-    const d = r.data.results?.[0] || {};
-    const ds = d.financials?.income_statement?.diluted_average_shares?.value;
-    const eps = d.financials?.income_statement?.basic_earnings_per_share?.value;
+    // ——— Fundamentales extendidos desde Polygon ———
+    const fr = await axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`);
+    const fin = fr.data.results?.[0]?.financials || {};
+    const inc = fin.income_statement || {};
+    const bal = fin.balance_sheet || {};
+
+    const totalRevenue = inc.revenues?.value || null;
+    const netIncome = inc.net_income?.value || null;
+    const eps = inc.basic_earnings_per_share?.value || null;
+    const shares = inc.diluted_average_shares?.value || null;
+    const marketCap = shares && vela.c ? shares * vela.c : null;
+    const peRatio = eps && vela.c ? vela.c / eps : null;
+    const totalCash = bal.cash_and_cash_equivalents?.value || null;
+    const totalDebt = bal.total_debt?.value || null;
+    const operatingExpenses = inc.operating_expenses?.value || null;
+    const profitMargin = (netIncome && totalRevenue) ? (netIncome / totalRevenue * 100).toFixed(2) : null;
+    const monthlyOp = operatingExpenses ? operatingExpenses / 12 : null;
+    const cashToMonthlyOps = (totalCash && monthlyOp) ? (totalCash / monthlyOp).toFixed(2) : null;
+
     const fundamental = {
-      marketCap: ds && vela.c ? ds * vela.c : null,
-      eps: eps || null,
-      peRatio: eps && vela.c ? vela.c / eps : null
+      totalRevenue, netIncome, eps,
+      totalCash, totalDebt, operatingExpenses,
+      profitMargin: profitMargin ? parseFloat(profitMargin) : null,
+      sharesOutstanding: shares || null,
+      marketCap, peRatio,
+      cashToMonthlyOps: cashToMonthlyOps ? parseFloat(cashToMonthlyOps) : null
     };
 
     // Short interest
@@ -147,7 +162,6 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       }));
     } catch {}
 
-    // Velas
     const velas = {
       day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
       week: [{
@@ -207,4 +221,3 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
-
