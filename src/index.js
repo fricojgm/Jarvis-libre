@@ -46,50 +46,6 @@ async function obtenerFinvizData(symbol, precioActual) {
   }
 }
 
-function calcularPrincipio5(datos) {
-  const {
-    eps, peRatio, totalCash, totalDebt,
-    totalRevenue, netIncome, operatingExpenses
-  } = datos;
-
-  const peCategoria = peRatio >= 30 ? 'Medium/High Growth'
-    : peRatio >= 15 ? 'Medium Growth'
-    : 'Value/Slow Growth';
-
-  const monthlyExp = operatingExpenses ? operatingExpenses / 12 : null;
-  const cashMonths = (totalCash && monthlyExp) ? (totalCash / monthlyExp) : null;
-  const cashLevel = cashMonths
-    ? cashMonths > 12 ? 'Óptimo'
-      : cashMonths > 6 ? 'Bueno'
-        : 'Débil'
-    : 'No disponible';
-
-  const debtLevel = totalDebt ? 'Saludable' : 'No disponible';
-  const profitMargin = (netIncome && totalRevenue)
-    ? parseFloat((netIncome / totalRevenue * 100).toFixed(2))
-    : null;
-
-  return {
-    paso1: { peRatio, categoria: peCategoria },
-    paso2: {
-      totalCash, totalDebt, operatingExpenses, monthlyExp,
-      cashToMonthlyOps: cashMonths, cashLevel, debtLevel
-    },
-    paso3: { revenueProximoAno: null },
-    paso4: { profitMargin },
-    paso5: { peRatioPromedio: peRatio },
-    paso6: { netIncome },
-    paso7: {
-      marketCapFuturo: (netIncome && peRatio) ? netIncome * peRatio : null
-    },
-    paso8: {
-      posibleRetorno: (netIncome && peRatio && datos.marketCap)
-        ? parseFloat((((netIncome * peRatio) / datos.marketCap - 1) * 100).toFixed(2))
-        : null
-    }
-  };
-}
-
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
   const { timeframe = 'day', cantidad = 250 } = req.query;
@@ -102,6 +58,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/${from.toISOString().split('T')[0]}/${now.toISOString().split('T')[0]}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
     const resp = await axios.get(url);
     const datos = resp.data.results;
+
     if (!datos || datos.length < 30) return res.status(400).json({ error: 'No suficientes datos' });
 
     const closes = datos.map(p => p.c);
@@ -135,31 +92,126 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
 
     const finviz = await obtenerFinvizData(symbol, vela.c);
 
-    const r = await axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&apiKey=${API_KEY}`);
-    const f = r.data.results?.[0]?.financials;
-    const income = f?.income_statement || {};
-    const balance = f?.balance_sheet || {};
-    const cashflow = f?.cash_flow_statement || {};
+    const r = await axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&sort=filing_date&apiKey=${API_KEY}`);
+    const d = r.data.results?.[0]?.financials || {};
 
-    const eps = income.basic_earnings_per_share?.value || null;
-    const netIncome = income.net_income?.value || null;
-    const totalRevenue = income.revenue?.value || null;
-    const operatingExpenses = income.operating_expenses?.value || null;
-    const totalCash = balance.cash_and_cash_equivalents?.value || null;
-    const totalDebt = balance.total_debt?.value || null;
-    const sharesOutstanding = income.diluted_average_shares?.value || null;
+    const revenue = d.income_statement?.revenues?.value || null;
+    const netIncome = d.income_statement?.net_income_loss?.value || null;
+    const eps = d.income_statement?.basic_earnings_per_share?.value || null;
+    const totalCash = d.balance_sheet?.cash_and_cash_equivalents?.value || null;
+    const totalDebt = d.balance_sheet?.debt?.value || null;
+    const opEx = d.income_statement?.operating_expenses?.value || null;
+    const shares = d.income_statement?.diluted_average_shares?.value || null;
 
-    const marketCap = sharesOutstanding && vela.c ? sharesOutstanding * vela.c : null;
+    const marketCap = shares && vela.c ? shares * vela.c : null;
     const peRatio = eps && vela.c ? vela.c / eps : null;
+    const monthlyExp = opEx ? opEx / 12 : null;
+    const cashToMonthlyOps = totalCash && monthlyExp ? totalCash / monthlyExp : null;
 
     const fundamental = {
-      totalRevenue, netIncome, eps, totalCash, totalDebt,
-      operatingExpenses, profitMargin: null,
-      sharesOutstanding, marketCap, peRatio,
-      cashToMonthlyOps: (totalCash && operatingExpenses) ? totalCash / (operatingExpenses / 12) : null
+      totalRevenue: revenue,
+      netIncome,
+      eps,
+      totalCash,
+      totalDebt,
+      operatingExpenses: opEx,
+      profitMargin: revenue && netIncome ? netIncome / revenue : null,
+      sharesOutstanding: shares,
+      marketCap,
+      peRatio,
+      cashToMonthlyOps
     };
 
-    const principio5 = calcularPrincipio5(fundamental);
+    const principio5 = {
+      paso1: {
+        peRatio,
+        categoria: peRatio >= 30 ? "Medium/High Growth" : peRatio >= 15 ? "Medium Growth" : "Value"
+      },
+      paso2: {
+        totalCash, totalDebt, operatingExpenses: opEx,
+        monthlyExp, cashToMonthlyOps,
+        cashLevel: totalCash ? (cashToMonthlyOps > 12 ? "Alta" : cashToMonthlyOps > 6 ? "Media" : "Baja") : "No disponible",
+        debtLevel: totalDebt ? (totalDebt > revenue ? "Alta" : "Sana") : "No disponible"
+      },
+      paso3: {
+        revenueProximoAno: null // no disponible
+      },
+      paso4: {
+        profitMargin: revenue && netIncome ? netIncome / revenue : null
+      },
+      paso5: {
+        peRatioPromedio: peRatio
+      },
+      paso6: {
+        netIncome
+      },
+      paso7: {
+        marketCapFuturo: netIncome && peRatio ? netIncome * peRatio : null
+      },
+      paso8: {
+        posibleRetorno: marketCap && netIncome && peRatio ?
+          ((netIncome * peRatio - marketCap) / marketCap) * 100 : null
+      }
+    };
+
+    let shortInterest = {};
+    try {
+      const r = await axios.get(`https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1&sort=settlement_date.desc&apiKey=${API_KEY}`);
+      const s = r.data.results?.[0];
+      if (s) {
+        shortInterest = {
+          settlement_date: s.settlement_date,
+          shortInterest: s.short_interest,
+          avgDailyVolumeSI: s.avg_daily_volume,
+          daysToCoverSI: s.days_to_cover
+        };
+      }
+    } catch {}
+
+    let shortVolume = {};
+    try {
+      const r = await axios.get(`https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&limit=1&sort=date.desc&apiKey=${API_KEY}`);
+      const s = r.data.results?.[0];
+      if (s) {
+        shortVolume = {
+          dateSV: s.date,
+          shortVolume: s.short_volume,
+          shortVolumeRatio: s.short_volume_ratio,
+          totalVolumeSV: s.total_volume
+        };
+      }
+    } catch {}
+
+    let noticias = [];
+    try {
+      const n = await axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&sort=published_utc&order=desc&apiKey=${API_KEY}`);
+      noticias = n.data.results.map(n => ({
+        titulo: n.title, resumen: n.description, url: n.article_url,
+        fuente: n.publisher?.name || "Desconocido", fecha: n.published_utc,
+        sentimiento: n.insights?.sentiment || "neutral"
+      }));
+    } catch {}
+
+    const velas = {
+      day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
+      week: [{
+        o: datos[0].o,
+        h: Math.max(...highs),
+        l: Math.min(...lows),
+        c: vela.c,
+        v: vols.reduce((a, b) => a + b, 0),
+        t: datos[0].t
+      }],
+      month: [{
+        o: datos[0].o,
+        h: Math.max(...highs),
+        l: Math.min(...lows),
+        c: vela.c,
+        v: vols.reduce((a, b) => a + b, 0),
+        t: datos[0].t
+      }],
+      hour: []
+    };
 
     res.json({
       symbol, timeframe,
@@ -169,15 +221,34 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       targetAnalistas: finviz.targetAnalistas,
       sma200Delta: finviz.sma200Delta,
       fundamental,
-      principio5
+      principio5,
+      shortInterest,
+      shortVolume,
+      volumen: {
+        volumenActual: vela.v,
+        volumenPromedio30Dias: (vols.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, vols.length)).toFixed(2),
+        volumenAcumulado: vols.reduce((a, b) => a + b, 0).toFixed(2)
+      },
+      resumenDia: {
+        aperturaDiaAnterior: datos.at(-2)?.o || "N/A",
+        minimoDiaAnterior: datos.at(-2)?.l || "N/A",
+        maximoDiaAnterior: datos.at(-2)?.h || "N/A",
+        cierreDiaAnterior: datos.at(-2)?.c || "N/A",
+        volumenResumenDiario: datos.at(-2)?.v || "N/A"
+      },
+      velas,
+      noticias,
+      resumen: { estadoActual: "Precaución", riesgo: "Medio", oportunidad: "Mixtas" },
+      horaNY: new Date().toISOString(),
+      horaLocal: new Date().toISOString(),
+      mercado: { estado: "Desconocido", tiempoParaEvento: "N/A" }
     });
 
   } catch (e) {
-    console.error("Error:", e.message);
+    console.error("Error interno:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));
-
+app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
