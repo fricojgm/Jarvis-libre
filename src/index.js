@@ -2,69 +2,66 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const {
-  RSI, MACD, ATR, BollingerBands, ADX, MFI, SMA, EMA, VWAP
-} = require('technicalindicators');
+const { RSI, MACD, ATR, BollingerBands, ADX, MFI, SMA, EMA, VWAP } = require('technicalindicators');
 
 const app = express();
 app.use(cors());
 
 const API_KEY = 'PxOMBWjCFxSbfan_jH9LAKp4oA4Fyl3V';
 
+// ——— FMI: Finviz scrap para targetAnalistas y sma200 etc.
 async function obtenerFinvizData(symbol, precioActual) {
   try {
     const url = `https://finviz.com/quote.ashx?t=${symbol}`;
-    const { data } = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
+    const { data } = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     const $ = cheerio.load(data);
-
     let target = null, sma200 = null;
-
     $('table.snapshot-table2 tr').each((_, row) => {
       $(row).find('td').each((i, cell) => {
         const label = $(cell).text().trim();
         const val = $(cell.next).text().trim();
-
-        if (label === 'Target Price') {
-          target = parseFloat(val);
-        }
-
+        if (label === 'Target Price') target = parseFloat(val);
         if (label === 'SMA200') {
-          const num = parseFloat(val.replace('%', ''));
-          if (!isNaN(num)) {
-            sma200 = parseFloat((precioActual / (1 + num / 100)).toFixed(2));
-          }
+          const pct = parseFloat(val.replace('%',''));
+          if (!isNaN(pct)) sma200 = parseFloat((precioActual / (1 + pct / 100)).toFixed(2));
         }
       });
     });
-
     const sma200Delta = sma200 ? parseFloat(((precioActual - sma200) / sma200 * 100).toFixed(2)) : null;
     return { targetAnalistas: target, sma200, sma200Delta };
-  } catch {
-    return { targetAnalistas: null, sma200: null, sma200Delta: null };
-  }
+  } catch { return { targetAnalistas: null, sma200: null, sma200Delta: null }; }
+}
+
+// ——— Historial PERatio en public.com scraping
+async function obtenerPERhistoric(symbol) {
+  try {
+    const url = `https://public.com/stocks/${symbol.toLowerCase()}/pe-ratio`;
+    const { data } = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const $ = cheerio.load(data);
+    const ratios = [];
+    $('table tbody tr').each((_, row) => {
+      const cell = $(row).find('td').first().text().trim();
+      const pr = parseFloat(cell);
+      if (!isNaN(pr)) ratios.push(pr);
+    });
+    if (ratios.length === 0) return null;
+    const sum = ratios.reduce((a,b)=>a+b,0);
+    return parseFloat((sum / ratios.length).toFixed(2));
+  } catch { return null; }
 }
 
 app.get('/reporte-mercado/:symbol', async (req, res) => {
   const { symbol } = req.params;
   const { timeframe = 'day', cantidad = 250 } = req.query;
-
   try {
-    const now = new Date();
-    const from = new Date(now);
+    const now = new Date(), from = new Date(now);
     from.setDate(now.getDate() - cantidad);
-
     const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/${timeframe}/${from.toISOString().split('T')[0]}/${now.toISOString().split('T')[0]}?adjusted=true&sort=asc&limit=${cantidad}&apiKey=${API_KEY}`;
     const resp = await axios.get(url);
     const datos = resp.data.results;
-
     if (!datos || datos.length < 30) return res.status(400).json({ error: 'No suficientes datos' });
 
-    const closes = datos.map(p => p.c);
-    const highs = datos.map(p => p.h);
-    const lows = datos.map(p => p.l);
-    const vols = datos.map(p => p.v);
+    const closes = datos.map(p=>p.c), highs = datos.map(p=>p.h), lows = datos.map(p=>p.l), vols = datos.map(p=>p.v);
     const vela = datos.at(-1);
 
     const rsi = RSI.calculate({ values: closes, period: 14 }).at(-1);
@@ -91,6 +88,7 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     };
 
     const finviz = await obtenerFinvizData(symbol, vela.c);
+    const pePromedio6m = await obtenerPERhistoric(symbol);
 
     const r = await axios.get(`https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=1&sort=filing_date&apiKey=${API_KEY}`);
     const d = r.data.results?.[0]?.financials || {};
@@ -122,94 +120,62 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       cashToMonthlyOps
     };
 
-    const principio5 = {
-      paso1: {
+    const principiosAbacus = {
+      principio1: {
+        targetAnalistas: finviz.targetAnalistas,
+        cumple: finviz.targetAnalistas && vela.c <= finviz.targetAnalistas * 0.8
+      },
+      principio2: {
+        salesGrowth: null,
+        categoria: revenue ? (revenue * 1.1 <= revenue ? "Madura" : (revenue * 1.2 <= revenue ? "Crecimiento" : "Estable")) : null
+      },
+      principio3: {
+        sma200: finviz.sma200,
+        precioActual: vela.c,
+        cumple: finviz.sma200 ? vela.c < finviz.sma200 : null
+      },
+      principio4: {
+        news: [] // aquí podrías volcar noticias o earning calls desde polygon
+      },
+      principio5: {
         peRatio,
-        categoria: peRatio >= 30 ? "Medium/High Growth" : peRatio >= 15 ? "Medium Growth" : "Value"
+        pePromedio6m,
+        category: peRatio >= 30 ? "Medium/High Growth" :
+                  peRatio >= 20 ? "Medium Growth" : "Value",
+        totalCash, totalDebt, opEx,
+        profitMargin: fundamental.profitMargin,
+        marketCapFuturo: netIncome && pePromedio6m ? netIncome * pePromedio6m : null,
+        retornoPct: marketCap && netIncome && pePromedio6m ? ((netIncome * pePromedio6m - marketCap) / marketCap * 100) : null
       },
-      paso2: {
-        totalCash, totalDebt, operatingExpenses: opEx,
-        monthlyExp, cashToMonthlyOps,
-        cashLevel: totalCash ? (cashToMonthlyOps > 12 ? "Alta" : cashToMonthlyOps > 6 ? "Media" : "Baja") : "No disponible",
-        debtLevel: totalDebt ? (totalDebt > revenue ? "Alta" : "Sana") : "No disponible"
+      principio6: {
+        soporte, resistencia
       },
-      paso3: {
-        revenueProximoAno: null // no disponible
-      },
-      paso4: {
-        profitMargin: revenue && netIncome ? netIncome / revenue : null
-      },
-      paso5: {
-        peRatioPromedio: peRatio
-      },
-      paso6: {
-        netIncome
-      },
-      paso7: {
-        marketCapFuturo: netIncome && peRatio ? netIncome * peRatio : null
-      },
-      paso8: {
-        posibleRetorno: marketCap && netIncome && peRatio ?
-          ((netIncome * peRatio - marketCap) / marketCap) * 100 : null
+      principio7: {
+        williamsR: null // puedes calcular con technicalindicators si agregas como input
       }
     };
 
-    let shortInterest = {};
+    let shortInterest = {}, shortVolume = [], noticias = [];
     try {
-      const r = await axios.get(`https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1&sort=settlement_date.desc&apiKey=${API_KEY}`);
-      const s = r.data.results?.[0];
-      if (s) {
-        shortInterest = {
-          settlement_date: s.settlement_date,
-          shortInterest: s.short_interest,
-          avgDailyVolumeSI: s.avg_daily_volume,
-          daysToCoverSI: s.days_to_cover
-        };
-      }
+      const si = await axios.get(`https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1&sort=settlement_date.desc&apiKey=${API_KEY}`);
+      const s = si.data.results?.[0];
+      if (s) shortInterest = { settlement_date: s.settlement_date, shortInterest: s.short_interest, avgDailyVolumeSI: s.avg_daily_volume, daysToCoverSI: s.days_to_cover };
     } catch {}
-
-    let shortVolume = {};
     try {
-      const r = await axios.get(`https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&limit=1&sort=date.desc&apiKey=${API_KEY}`);
-      const s = r.data.results?.[0];
-      if (s) {
-        shortVolume = {
-          dateSV: s.date,
-          shortVolume: s.short_volume,
-          shortVolumeRatio: s.short_volume_ratio,
-          totalVolumeSV: s.total_volume
-        };
-      }
+      const sv = await axios.get(`https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&limit=1&sort=date.desc&apiKey=${API_KEY}`);
+      const su = sv.data.results?.[0];
+      if (su) shortVolume = { dateSV: su.date, shortVolume: su.short_volume, shortVolumeRatio: su.short_volume_ratio, totalVolumeSV: su.total_volume };
     } catch {}
-
-    let noticias = [];
     try {
       const n = await axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&sort=published_utc&order=desc&apiKey=${API_KEY}`);
-      noticias = n.data.results.map(n => ({
-        titulo: n.title, resumen: n.description, url: n.article_url,
-        fuente: n.publisher?.name || "Desconocido", fecha: n.published_utc,
-        sentimiento: n.insights?.sentiment || "neutral"
-      }));
+      noticias = n.data.results.map(xx => ({ titulo: xx.title, resumen: xx.description, url: xx.article_url, fuente: xx.publisher?.name || "Desconocido", fecha: xx.published_utc, sentimiento: xx.insights?.sentiment || "neutral" }));
+      principiosAbacus.principio4.news = noticias;
     } catch {}
 
     const velas = {
-      day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
-      week: [{
-        o: datos[0].o,
-        h: Math.max(...highs),
-        l: Math.min(...lows),
-        c: vela.c,
-        v: vols.reduce((a, b) => a + b, 0),
-        t: datos[0].t
-      }],
-      month: [{
-        o: datos[0].o,
-        h: Math.max(...highs),
-        l: Math.min(...lows),
-        c: vela.c,
-        v: vols.reduce((a, b) => a + b, 0),
-        t: datos[0].t
-      }],
+      day: datos.slice(-4).map(p=>({o:p.o,h:p.h,l:p.l,c:p.c,v:p.v,t:p.t})),
+      week: [{o:datos[0].o, h:Math.max(...highs), l:Math.min(...lows), c:vela.c, v:vols.reduce((a,b)=>a+b,0), t:datos[0].t}],
+      month: [{o:datos[0].o, h:Math.max(...highs), l:Math.min(...lows), c:vela.c, v:vols.reduce((a,b)=>a+b,0), t:datos[0].t}],
       hour: []
     };
 
@@ -221,13 +187,13 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       targetAnalistas: finviz.targetAnalistas,
       sma200Delta: finviz.sma200Delta,
       fundamental,
-      principio5,
+      principiosAbacus,
       shortInterest,
       shortVolume,
       volumen: {
         volumenActual: vela.v,
-        volumenPromedio30Dias: (vols.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, vols.length)).toFixed(2),
-        volumenAcumulado: vols.reduce((a, b) => a + b, 0).toFixed(2)
+        volumenPromedio30Dias: (vols.slice(-30).reduce((a,b)=>a+b,0)/Math.min(30,vols.length)).toFixed(2),
+        volumenAcumulado: vols.reduce((a,b)=>a+b,0).toFixed(2)
       },
       resumenDia: {
         aperturaDiaAnterior: datos.at(-2)?.o || "N/A",
