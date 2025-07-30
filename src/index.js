@@ -164,18 +164,23 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       cashToMonthlyOps
     };
 
-    const principio5 = {
-      peRatio,
-      pePromedio6m,
-      category: peRatio >= 30 ? "Medium/High Growth" : peRatio >= 15 ? "Medium Growth" : "Value",
-      totalCash: finviz.totalCash,
-      totalDebt: finviz.totalDebt,
-      opEx,
-      profitMargin: profitMarginFinal,
-      marketCapFuturo: netIncome && pePromedio6m ? netIncome * pePromedio6m : null,
-      retornoPct: marketCap && netIncome && pePromedio6m ?
-        ((netIncome * pePromedio6m - marketCap) / marketCap) * 100 : null
-    };
+    const gananciaEstimada = revenue && profitMarginFinal ? revenue * profitMarginFinal : null;
+const marketCapFuturo = gananciaEstimada && pePromedio6m ? gananciaEstimada * pePromedio6m : null;
+const retornoPct = marketCap && marketCapFuturo ? ((marketCapFuturo / marketCap) - 1) * 100 : null;
+
+const principio5 = {
+  peRatio,
+  pePromedio6m,
+  category: peRatio >= 30 ? "Medium/High Growth" : peRatio >= 15 ? "Medium Growth" : "Value",
+  totalCash: finviz.totalCash,
+  totalDebt: finviz.totalDebt,
+  opEx,
+  profitMargin: profitMarginFinal,
+  gananciaEstimada,
+  marketCapFuturo,
+  retornoPct
+};
+
 
     // puedes mantener los otros bloques (shortInterest, velas, noticias, etc.) iguales a tu index original...
 
