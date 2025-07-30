@@ -16,8 +16,8 @@ async function obtenerPromedioPERatio(symbol) {
   try {
     const { data } = await axios.get(`https://public.com/stocks/${symbol}/pe-ratio`);
     const $ = cheerio.load(data);
-
     const valores = [];
+
     $('table tbody tr').each((_, row) => {
       const val = $(row).find('td').eq(1).text().trim();
       const pe = parseFloat(val.replace(',', ''));
@@ -27,13 +27,12 @@ async function obtenerPromedioPERatio(symbol) {
     const ultimos6 = valores.slice(0, 6);
     const promedio = ultimos6.reduce((a, b) => a + b, 0) / ultimos6.length;
     return parseFloat(promedio.toFixed(2));
-  } catch (e) {
-    console.error("Error scraping PE promedio:", e.message);
+  } catch {
     return null;
   }
 }
 
-// Scrape Finviz y extrae SMA200, Target, Profit Margin, Debt/Eq, Cash/sh, Shs Outstand
+// Scrape Finviz
 async function obtenerFinvizData(symbol, precioActual) {
   try {
     const url = `https://finviz.com/quote.ashx?t=${symbol}`;
@@ -43,7 +42,7 @@ async function obtenerFinvizData(symbol, precioActual) {
     const $ = cheerio.load(data);
 
     let target = null, sma200 = null, profitMargin = null;
-    let cashSh = null, shsOut = null, debtEq = null;
+    let cashSh = null, shsOut = null;
 
     $('table.snapshot-table2 tr').each((_, row) => {
       $(row).find('td').each((i, cell) => {
@@ -68,23 +67,14 @@ async function obtenerFinvizData(symbol, precioActual) {
             shsOut = num * mult;
           }
         }
-        if (label === 'Debt/Eq') debtEq = parseFloat(val);
       });
     });
 
     const sma200Delta = sma200 ? parseFloat(((precioActual - sma200) / sma200 * 100).toFixed(2)) : null;
     const totalCash = cashSh && shsOut ? cashSh * shsOut : null;
-    const totalDebt = null; // Opcional: debtEq * total equity si se puede scrapear
-    return {
-      targetAnalistas: target,
-      sma200,
-      sma200Delta,
-      profitMargin,
-      totalCash,
-      totalDebt
-    };
-  } catch (e) {
-    console.error("Error scraping Finviz:", e.message);
+
+    return { targetAnalistas: target, sma200, sma200Delta, profitMargin, totalCash, totalDebt: null };
+  } catch {
     return {};
   }
 }
@@ -148,7 +138,11 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
     const peRatio = eps && vela.c ? vela.c / eps : null;
     const monthlyExp = opEx ? opEx / 12 : null;
     const cashToMonthlyOps = finviz.totalCash && monthlyExp ? finviz.totalCash / monthlyExp : null;
-    const profitMarginFinal = finviz.profitMargin || (revenue && netIncome ? netIncome / revenue : null);
+    const profitMarginFinal = finviz.profitMargin ?? (revenue && netIncome ? netIncome / revenue : null);
+
+    const gananciaEstimada = revenue && profitMarginFinal ? revenue * profitMarginFinal : null;
+    const marketCapFuturo = gananciaEstimada && pePromedio6m ? gananciaEstimada * pePromedio6m : null;
+    const retornoPct = marketCap && marketCapFuturo ? ((marketCapFuturo / marketCap) - 1) * 100 : null;
 
     const fundamental = {
       totalRevenue: revenue,
@@ -164,25 +158,77 @@ app.get('/reporte-mercado/:symbol', async (req, res) => {
       cashToMonthlyOps
     };
 
-    const gananciaEstimada = revenue && profitMarginFinal ? revenue * profitMarginFinal : null;
-const marketCapFuturo = gananciaEstimada && pePromedio6m ? gananciaEstimada * pePromedio6m : null;
-const retornoPct = marketCap && marketCapFuturo ? ((marketCapFuturo / marketCap) - 1) * 100 : null;
+    const principio5 = {
+      peRatio,
+      pePromedio6m,
+      category: peRatio >= 30 ? "Medium/High Growth" : peRatio >= 15 ? "Medium Growth" : "Value",
+      totalCash: finviz.totalCash,
+      totalDebt: finviz.totalDebt,
+      opEx,
+      profitMargin: profitMarginFinal,
+      gananciaEstimada,
+      marketCapFuturo,
+      retornoPct
+    };
 
-const principio5 = {
-  peRatio,
-  pePromedio6m,
-  category: peRatio >= 30 ? "Medium/High Growth" : peRatio >= 15 ? "Medium Growth" : "Value",
-  totalCash: finviz.totalCash,
-  totalDebt: finviz.totalDebt,
-  opEx,
-  profitMargin: profitMarginFinal,
-  gananciaEstimada,
-  marketCapFuturo,
-  retornoPct
-};
+    let shortInterest = {};
+    try {
+      const r = await axios.get(`https://api.polygon.io/stocks/v1/short-interest?ticker=${symbol}&limit=1&sort=settlement_date.desc&apiKey=${API_KEY}`);
+      const s = r.data.results?.[0];
+      if (s) {
+        shortInterest = {
+          settlement_date: s.settlement_date,
+          shortInterest: s.short_interest,
+          avgDailyVolumeSI: s.avg_daily_volume,
+          daysToCoverSI: s.days_to_cover
+        };
+      }
+    } catch {}
 
+    let shortVolume = {};
+    try {
+      const r = await axios.get(`https://api.polygon.io/stocks/v1/short-volume?ticker=${symbol}&limit=1&sort=date.desc&apiKey=${API_KEY}`);
+      const s = r.data.results?.[0];
+      if (s) {
+        shortVolume = {
+          dateSV: s.date,
+          shortVolume: s.short_volume,
+          shortVolumeRatio: s.short_volume_ratio,
+          totalVolumeSV: s.total_volume
+        };
+      }
+    } catch {}
 
-    // puedes mantener los otros bloques (shortInterest, velas, noticias, etc.) iguales a tu index original...
+    let noticias = [];
+    try {
+      const n = await axios.get(`https://api.polygon.io/v2/reference/news?ticker=${symbol}&limit=5&sort=published_utc&order=desc&apiKey=${API_KEY}`);
+      noticias = n.data.results.map(n => ({
+        titulo: n.title, resumen: n.description, url: n.article_url,
+        fuente: n.publisher?.name || "Desconocido", fecha: n.published_utc,
+        sentimiento: n.insights?.sentiment || "neutral"
+      }));
+    } catch {}
+
+    const velas = {
+      day: datos.slice(-4).map(p => ({ o: p.o, h: p.h, l: p.l, c: p.c, v: p.v, t: p.t })),
+      week: [{
+        o: datos[0].o,
+        h: Math.max(...highs),
+        l: Math.min(...lows),
+        c: vela.c,
+        v: vols.reduce((a, b) => a + b, 0),
+        t: datos[0].t
+      }],
+      month: [{
+        o: datos[0].o,
+        h: Math.max(...highs),
+        l: Math.min(...lows),
+        c: vela.c,
+        v: vols.reduce((a, b) => a + b, 0),
+        t: datos[0].t
+      }],
+      hour: []
+    };
 
     res.json({
       symbol, timeframe,
@@ -193,32 +239,19 @@ const principio5 = {
       sma200Delta: finviz.sma200Delta,
       fundamental,
       principiosAbacus: {
-        principio1: {
-          targetAnalistas: finviz.targetAnalistas,
-          cumple: vela.c < finviz.targetAnalistas * 0.8
-        },
-        principio2: {
-          salesGrowth: null,
-          categoria: "Estable"
-        },
-        principio3: {
-          sma200: finviz.sma200,
-          precioActual: vela.c,
-          cumple: vela.c < finviz.sma200
-        },
-        principio4: {
-          news: [] // llenar con noticias si quieres
-        },
+        principio1: { targetAnalistas: finviz.targetAnalistas, cumple: vela.c < finviz.targetAnalistas * 0.8 },
+        principio2: { salesGrowth: null, categoria: "Estable" },
+        principio3: { sma200: finviz.sma200, precioActual: vela.c, cumple: vela.c < finviz.sma200 },
+        principio4: { news: noticias },
         principio5,
-        principio6: {
-          soporte, resistencia
-        },
-        principio7: {
-          williamsR: null
-        }
-      }
+        principio6: { soporte, resistencia },
+        principio7: { williamsR: null }
+      },
+      shortInterest,
+      shortVolume,
+      noticias,
+      velas
     });
-
   } catch (e) {
     console.error("Error interno:", e.message);
     res.status(500).json({ error: "Error interno" });
@@ -227,3 +260,4 @@ const principio5 = {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
+
