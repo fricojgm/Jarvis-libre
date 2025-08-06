@@ -49,6 +49,10 @@ async function getFinvizData(symbol, precioActual) {
       }
     }
     if (label === 'Debt/Eq') data.debtEq = parseFloat(val);
+    if (label === 'EPS (ttm)') {
+      const num = parseFloat(val);
+      if (!isNaN(num)) data.eps = num;
+    }
   });
 
   data.totalCash = data.cashSh && data.shsOut ? data.cashSh * data.shsOut : null;
@@ -94,13 +98,19 @@ app.get('/principios/:symbol', async (req, res) => {
     const cumple3 = currentPrice < sma200;
 
     const profitMargin = finviz.profitMargin;
-    const cashLevel = finviz.totalCash && finviz.shsOut && finviz.cashSh
+    const cashLevel = finviz.totalCash
       ? finviz.totalCash / (26.11e9 / 12)
       : null;
 
     const deudaSaludable = finviz.totalCash && finviz.debtEq
-      ? 28.19e9 - (finviz.debtEq * 1000000000) > 0
+      ? 28.19e9 - (finviz.debtEq * 1e9) > 0
       : null;
+
+    const peRatio = finviz.eps ? +(currentPrice / finviz.eps).toFixed(2) : null;
+    const clasificacion =
+      peRatio < 20 ? 'Conservador'
+        : peRatio < 40 ? 'Moderado'
+        : 'Riesgoso';
 
     const cumple7 = williamsR >= -41 && williamsR <= -40;
 
@@ -125,10 +135,10 @@ app.get('/principios/:symbol', async (req, res) => {
           observacion: "Revisar conference call y resultados earnings más recientes"
         },
         principio5: {
-          peRatio: +(currentPrice / 2.33).toFixed(2),
+          peRatio,
           cashLevel: cashLevel?.toFixed(2),
           deudaSaludable,
-          clasificacion: currentPrice / 2.33 < 20 ? 'Conservador' : currentPrice / 2.33 < 40 ? 'Moderado' : 'Riesgoso'
+          clasificacion
         },
         principio6: {
           soporte: Math.min(...closes.slice(-30)),
